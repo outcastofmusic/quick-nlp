@@ -1,0 +1,3 @@
+[submodule "fastai"]
+	path = fastai
+	url = https://outcastofmusic@github.com/fastai/fastai.git
