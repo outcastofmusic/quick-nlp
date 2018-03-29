@@ -1,4 +1,0 @@
-[submodule "fastai"]
-	path = fastai
-	url = https://github.com/fastai/fastai
-    ignore = dirty
