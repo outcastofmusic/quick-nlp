@@ -23,5 +23,5 @@ def test_TabularDatasetFromDataFrame(hierarchical_data):
         assert example.text[0].startswith("__role1__")
         assert "sl" in example_vars
         assert "roles" in example_vars
-        # and the example.sl has the sequencelength of every utterance in the conversation
+        # and the example.sl has the sequence length of every utterance in the conversation
         assert len(example.text) == sum(example.sl)

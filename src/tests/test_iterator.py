@@ -55,9 +55,11 @@ def test_hierarchical_iterator(hiterator):
     batch = next(dliter)
     # and I expect the features to be 3D [conv_length, sequence_length, batch_size]
     assert len(batch.context.shape) == 3
-    assert len(batch.response.shape) == 3
+    # responses and targets have shape [sequence_length, batch_size]
+    assert len(batch.response.shape) == 2
+    assert len(batch.targets.shape) == 2
 
     assert_dims(batch.context, [None, None, batch.batch_size])
-    assert_dims(batch.response, [None, None, batch.batch_size])
-    assert_dims(batch.targets, [None, None, batch.batch_size])
-    assert (batch.response[:, 1:] == batch.targets).all()
+    assert_dims(batch.response, [None, batch.batch_size])
+    assert_dims(batch.targets, [None, batch.batch_size])
+    assert (batch.response[1:] == batch.targets).all()

@@ -65,12 +65,13 @@ class HierarchicalIterator(BucketIterator):
                         minibatch.sort(key=self.sort_key, reverse=True)
 
                 context, response, targets = self.process_minibatch(minibatch)
-                yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
-                                     train=self.train,
-                                     context=context,
-                                     response=response,
-                                     targets=targets
-                                     )
+                for index in range(1, context.shape[0]):
+                    yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
+                                         train=self.train,
+                                         context=context[:index],
+                                         response=response[index],
+                                         targets=targets[index]
+                                         )
             if not self.repeat:
                 raise StopIteration
 

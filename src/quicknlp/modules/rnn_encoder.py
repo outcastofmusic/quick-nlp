@@ -81,6 +81,12 @@ class RNNEncoder(nn.Module):
         self.weights = next(self.parameters()).data
         self.hidden = [self.rnns[l].hidden_state(bs) for l in range(self.nlayers)]
 
+    def hidden_shape(self, bs):
+        if isinstance(self.rnns[0].hidden_state(1), tuple):
+            return [self.rnns[l].hidden_state(bs)[0].shape for l in range(self.nlayers)]
+        else:
+            return [self.rnns[l].hidden_state(bs).shape for l in range(self.nlayers)]
+
 
 class EmbeddingRNNEncoder(RNNEncoder):
     """
