@@ -90,6 +90,7 @@ def test_S2SModelData_learner(s2smodel):
     assert len(text_results[0]) == predict_results[0].shape[1]
     assert len(text_results[0][0]) == predict_results[0].shape[2]
     # sos token at the beginning is removed so the number of tokens should be equal to shape[0] -1
+    # TODO fix test
     assert len(text_results[0][0][-1].split()) == predict_results[0].shape[0] - 1, "text_results: {}".format(
         text_results)
 
