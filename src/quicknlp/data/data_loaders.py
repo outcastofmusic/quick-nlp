@@ -57,7 +57,7 @@ class HierarchicalDataLoader:
         self.iter = 0
         for batch in self.dl:
             if self.iter >= len(self): raise StopIteration
-            yield [batch.context, batch.response]
+            yield [batch.context, batch.response, batch.targets]
             self.iter += 1
 
     def __len__(self):

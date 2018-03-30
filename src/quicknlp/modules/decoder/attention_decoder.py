@@ -4,10 +4,10 @@ from typing import Optional
 import torch
 
 from quicknlp.utils import assert_dims
-from .basic_decoder import RNNDecoder
+from .basic_decoder import EmbeddingRNNDecoder
 
 
-class RNNAttentionDecoder(RNNDecoder):
+class RNNAttentionDecoder(EmbeddingRNNDecoder):
 
     def __init__(self, ntoken: int, emb_sz: int, nhid: int, nlayers: int, pad_token: int, eos_token: int,
                  max_tokens=10, embedding_layer: Optional[torch.nn.Module] = None, dropouth=0.3, dropouti=0.65,

@@ -3,7 +3,7 @@ import torch.nn as nn
 from quicknlp.modules.decoder import RNNAttentionDecoder
 from quicknlp.modules.projection import AttentionProjection
 from quicknlp.utils import assert_dims
-from .rnn_encoder import RNNEncoder
+from .rnn_encoder import EmbeddingRNNEncoder
 from .seq2seq import Seq2Seq, HParam, get_list
 
 
@@ -39,8 +39,8 @@ class Seq2SeqAttention(Seq2Seq):
             dropoutd = kwargs.pop("dropoutd")
         else:
             dropoutd = 0.5
-        self.encoder = RNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
-                                  pad_token=pad_token, bidir=bidir, **kwargs)
+        self.encoder = EmbeddingRNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
+                                           pad_token=pad_token, bidir=bidir, **kwargs)
 
         self.decoder = RNNAttentionDecoder(ntoken=ntoken[-1], emb_sz=emb_sz[-1], nhid=nhid[-1], nlayers=nlayers[-1],
                                            pad_token=pad_token, eos_token=eos_token, max_tokens=max_tokens,
@@ -66,7 +66,6 @@ class Seq2SeqAttention(Seq2Seq):
         bs = encoder_inputs.size(1)
         self.encoder.reset(bs)
         self.decoder.reset(bs)
-        self.encoder(encoder_inputs)
         raw_outpus, outputs = self.encoder(encoder_inputs)
         state = self.decoder.hidden
         assert_dims(outputs, [self.nlayers[0], None, bs, (self.nhid[0], self.emb_sz[0])])

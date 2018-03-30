@@ -11,7 +11,7 @@ def test_TabularDatasetFromFiles(s2smodel_data):
         ("french", Field(init_token="__init__", eos_token="__eos__", lower=True)),
         ("german", Field(init_token="__init__", eos_token="__eos__", lower=True))
     ]
-    ds = TabularDatasetFromFiles(path=train, fields=fields)
+    ds = TabularDatasetFromFiles(path=path / train, fields=fields)
     assert ds is not None
     assert 400 == len(ds)
     assert {"english", "french", "german"} == ds.fields.keys()
@@ -24,7 +24,7 @@ def test_TabularDatasetFromFiles(s2smodel_data):
 
 def test_TabularDatasetFromDataFrame(s2smodel_data):
     path, train, valid, test = s2smodel_data
-    df = pd.read_csv(train + "/data.tsv", header=None, sep="\t")
+    df = pd.read_csv(path / train / "data.tsv", header=None, sep="\t")
     df.columns = ["english", "french", "german"]
     df['random_column'] = "N/A"
     fields = [

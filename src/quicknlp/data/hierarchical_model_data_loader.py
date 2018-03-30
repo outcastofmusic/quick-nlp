@@ -127,9 +127,10 @@ class HierarchicalModelData(ModelData):
                    target_names=target_names, bs=bs, sort_key=sort_key, **kwargs)
 
     @classmethod
-    def from_text_files(cls, path: str, text_field: Field, target_names: List[str], train: str, validation: str,
+    def from_text_files(cls, path: str, text_field: Field, train: str, validation: str,
                         text_col: str, batch_col: str, sort_col: str, role_col: str,
-                        test: Optional[str] = None, bs: Optional[int] = 64,
+                        file_format: str,
+                        test: Optional[str] = None, target_names: Optional[List[str]] = None, bs: Optional[int] = 64,
                         sort_key: Optional[Callable] = None,
                         **kwargs) -> 'HierarchicalModelData':
         """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from files
@@ -164,7 +165,8 @@ class HierarchicalModelData(ModelData):
                                                        text_col=text_col,
                                                        batch_col=batch_col,
                                                        role_col=role_col,
-                                                       sort_col=sort_col
+                                                       sort_col=sort_col,
+                                                       file_format=file_format
                                                        )
         trn_ds = datasets[0]
         val_ds = datasets[1]

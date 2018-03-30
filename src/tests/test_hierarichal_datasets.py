@@ -6,7 +6,7 @@ from quicknlp.data.datasets import HierarchicalDatasetFromDataFrame
 
 def test_TabularDatasetFromDataFrame(hierarchical_data):
     path, train, valid, test = hierarchical_data
-    df = pd.read_csv(train + "/data.tsv", header=None, sep="\t")
+    df = pd.read_csv(path / train / "data.tsv", header=None, sep="\t")
     df.columns = ["chat_id", "timestamp", "text", "role"]
     field = Field(pad_token="__pad__", init_token="__init__", eos_token="__eos__", lower=True)
     # When I create a hierarchical Dataset
@@ -14,7 +14,7 @@ def test_TabularDatasetFromDataFrame(hierarchical_data):
                                           sort_col="timestamp",
                                           text_col="text", role_col="role")
     assert ds is not None
-    assert 4 == len(ds)
+    assert 3 == len(ds)
     # Then every batch is a conversation
     for example in ds:
         example_vars = vars(example)

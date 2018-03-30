@@ -95,21 +95,23 @@ class HierarchicalDatasetFromDataFrame(Dataset):
         df = [df] if not isinstance(df, list) else df
         for _df in df:
             for chat_id, conversation in _df.groupby(batch_col):
-                if sort_col is not None:
-                    conversation = conversation.sort_values(by=sort_col)
-                conversation_tokens = "__" + conversation[role_col] + "__"
-                text_with_roles = (conversation_tokens + " " + conversation[text_col]).astype(str)
-                text_with_roles_length = text_with_roles.str.split().apply(len)
-                text = "".join(text_with_roles.str.cat(sep=" "))
-                roles = "".join(conversation_tokens.str.cat(sep=" "))
-                example = Example.fromlist([text, roles], fields)
-                example.sl = text_with_roles_length.tolist()
-                examples.append(example)
+                if conversation[role_col].nunique() > 1:
+                    if sort_col is not None:
+                        conversation = conversation.sort_values(by=sort_col)
+                    conversation_tokens = "__" + conversation[role_col] + "__"
+                    text_with_roles = (conversation_tokens + " " + conversation[text_col]).astype(str)
+                    text_with_roles_length = text_with_roles.str.split().apply(len)
+                    text = "".join(text_with_roles.str.cat(sep=" "))
+                    roles = "".join(conversation_tokens.str.cat(sep=" "))
+                    example = Example.fromlist([text, roles], fields)
+                    example.sl = text_with_roles_length.tolist()
+                    examples.append(example)
 
         super().__init__(examples=examples, fields=fields, **kwargs)
 
     @classmethod
-    def splits(cls, train_df: Optional[pd.DataFrame] = None, val_df: Optional[pd.DataFrame] = None,
+    def splits(cls, path: Optional[str] = None, train_df: Optional[pd.DataFrame] = None,
+               val_df: Optional[pd.DataFrame] = None,
                test_df: Optional[pd.DataFrame] = None, **kwargs) -> Tuple['HierarchicalDatasetFromDataFrame', ...]:
         train_data = None if train_df is None else cls(train_df, **kwargs)
         val_data = None if val_df is None else cls(val_df, **kwargs)
@@ -129,20 +131,17 @@ def load_dfs(paths: str, format: str, encoding: Optional[str] = None) -> List[pd
 class HierarchicalDatasetFromFiles(HierarchicalDatasetFromDataFrame):
     def __init__(self, path, file_format, text_field: Field, batch_col: str, text_col: str, role_col: str,
                  sort_col: Optional[str] = None, encoding: Optional[str] = None, **kwargs):
-        if os.path.isdir(path):
-            paths = glob(f'{path}/*.*')
-        else:
-            paths = [path]
+        paths = glob(f'{path}/*.*') if os.path.isdir(path) else [path]
         dfs = load_dfs(paths, format=file_format, encoding=encoding)
         super(HierarchicalDatasetFromFiles, self).__init__(df=dfs, text_field=text_field,
                                                            batch_col=batch_col, text_col=text_col,
                                                            role_col=role_col, sort_col=sort_col, **kwargs)
 
     @classmethod
-    def splits(cls, train_path: Optional[str] = None, val_path: Optional[str] = None,
+    def splits(cls, path: str, train_path: Optional[str] = None, val_path: Optional[str] = None,
                test_path: Optional[str] = None, **kwargs) -> Tuple['HierarchicalDatasetFromFiles', ...]:
-        train_data = None if train_path is None else cls(train_path, **kwargs)
-        val_data = None if val_path is None else cls(val_path, **kwargs)
-        test_data = None if test_path is None else cls(test_path, **kwargs)
+        train_data = None if train_path is None else cls(os.path.join(path, train_path), **kwargs)
+        val_data = None if val_path is None else cls(os.path.join(path, val_path), **kwargs)
+        test_data = None if test_path is None else cls(os.path.join(path, test_path), **kwargs)
 
         return tuple(d for d in (train_data, val_data, test_data) if d is not None)

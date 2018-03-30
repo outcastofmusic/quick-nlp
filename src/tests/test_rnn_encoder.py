@@ -1,7 +1,7 @@
 import numpy as np
-
 from fastai.core import V, T, to_gpu, to_np
-from quicknlp.modules import RNNEncoder
+
+from quicknlp.modules import EmbeddingRNNEncoder
 
 
 def test_BiRNNEncoder():
@@ -9,8 +9,8 @@ def test_BiRNNEncoder():
     emb_sz = 2
     nhid = 6
     # Given a birnnencoder
-    encoder = RNNEncoder(ntoken, emb_sz, nhid=nhid, nlayers=2, pad_token=0,
-                         dropouth=0.0, dropouti=0.0, dropoute=0.0, wdrop=0.0)
+    encoder = EmbeddingRNNEncoder(ntoken, emb_sz, nhid=nhid, nlayers=2, pad_token=0,
+                                  dropouth=0.0, dropouti=0.0, dropoute=0.0, wdrop=0.0)
 
     encoder = to_gpu(encoder)
     assert encoder is not None

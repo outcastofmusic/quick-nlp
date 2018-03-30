@@ -3,7 +3,7 @@ from typing import List, Union
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quicknlp.modules import EmbeddingRNNDecoder, EmbeddingRNNEncoder
+from quicknlp.modules import EmbeddingRNNDecoder, EmbeddingRNNEncoder, RNNEncoder
 from quicknlp.modules.projection import Projection
 from quicknlp.utils import get_list, concat_bidir_state, assert_dims
 
@@ -22,8 +22,8 @@ def s2sloss(input, target, pad_idx, *args, **kwargs):
                            *args, **kwargs)
 
 
-class Seq2Seq(nn.Module):
-    """Basic Seq2Seq model"""
+class HRED(nn.Module):
+    """Basic HRED model"""
 
     def __init__(self, ntoken: HParam, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
@@ -43,20 +43,21 @@ class Seq2Seq(nn.Module):
             bidir (bool): if True use a bidirectional encoder
             **kwargs: Extra embeddings that will be passed to the encoder and the decoder
         """
-        super(Seq2Seq, self).__init__()
+        super().__init__()
         # allow for the same or different parameters between encoder and decoder
         ntoken, emb_sz, nhid, nlayers = get_list(ntoken), get_list(emb_sz), get_list(nhid), get_list(nlayers)
-        if "dropoutd" in kwargs:
-            dropoutd = kwargs.pop("dropoutd")
-        else:
-            dropoutd = 0.5
-        self.encoder = EmbeddingRNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
-                                           pad_token=pad_token, bidir=bidir, **kwargs)
+        dropoutd = kwargs.pop("dropoutd") if "dropoutd" in kwargs else 0.5
+
+        self.query_encoder = EmbeddingRNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
+                                                 pad_token=pad_token, bidir=bidir, out_dim=nhid[0], **kwargs)
+
+        self.session_encoder = RNNEncoder(in_dim=nhid[0], nhid=nhid[1], out_dim=nhid[-1], nlayers=1, bidir=bidir,
+                                          **kwargs)
 
         self.decoder = EmbeddingRNNDecoder(ntoken=ntoken[-1], emb_sz=emb_sz[-1], nhid=nhid[-1], nlayers=nlayers[-1],
                                            pad_token=pad_token, eos_token=eos_token, max_tokens=max_tokens,
                                            # Share the embedding layer between encoder and decoder
-                                           embedding_layer=self.encoder.encoder_with_dropout.embed if share_embedding_layer else None,
+                                           embedding_layer=self.query_encoder.encoder_with_dropout.embed if share_embedding_layer else None,
                                            # potentially tie the output projection with the decoder embedding
                                            **kwargs
                                            )
@@ -70,10 +71,12 @@ class Seq2Seq(nn.Module):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
         bs = encoder_inputs.size(1)
-        self.encoder.reset(bs)
+        self.query_encoder.reset(bs)
+        self.session_encoder.reset(bs)
         self.decoder.reset(bs)
-        raw_outpus, outputs = self.encoder(encoder_inputs)
-        state = concat_bidir_state(self.encoder.hidden)
+        raw_outpus, outputs = self.query_encoder(encoder_inputs)
+        raw_outputs_session, outputs_session = self.session_encoder(outputs)
+        state = concat_bidir_state(self.session_encoder.hidden)
         raw_outputs_dec, outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
         if num_beams == 0:
             # use output of the projection module

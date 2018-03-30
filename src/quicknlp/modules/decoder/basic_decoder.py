@@ -2,9 +2,9 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
-
 from fastai.core import V, to_gpu
-from quicknlp.modules.rnn_encoder import RNNEncoder
+
+from quicknlp.modules.rnn_encoder import EmbeddingRNNEncoder
 from quicknlp.utils import assert_dims
 
 
@@ -35,16 +35,17 @@ def select_hidden_by_index(hidden, indices):
     return results
 
 
-class RNNDecoder(RNNEncoder):
+class EmbeddingRNNDecoder(EmbeddingRNNEncoder):
 
     def __init__(self, ntoken: int, emb_sz: int, nhid: int, nlayers: int, pad_token: int, eos_token: int,
                  max_tokens=10, embedding_layer: Optional[torch.nn.Module] = None, dropouth=0.3, dropouti=0.65,
                  dropoute=0.1, wdrop=0.5, cell_type="lstm", **kwargs):
-        super(RNNDecoder, self).__init__(ntoken=ntoken, emb_sz=emb_sz, nhid=nhid, nlayers=nlayers, pad_token=pad_token,
-                                         bidir=False,  # Decoder can't see into the future (yet!)
-                                         dropouth=dropouth, dropouti=dropouti, dropoute=dropoute, wdrop=wdrop,
-                                         cell_type=cell_type, **kwargs
-                                         )
+        super(EmbeddingRNNDecoder, self).__init__(ntoken=ntoken, emb_sz=emb_sz, nhid=nhid, nlayers=nlayers,
+                                                  pad_token=pad_token,
+                                                  bidir=False,  # Decoder can't see into the future (yet!)
+                                                  dropouth=dropouth, dropouti=dropouti, dropoute=dropoute, wdrop=wdrop,
+                                                  cell_type=cell_type, **kwargs
+                                                  )
         if embedding_layer is not None:
             self.encoder.weight = embedding_layer.weight
 
@@ -71,7 +72,7 @@ class RNNDecoder(RNNEncoder):
 
     def _train_forward(self, inputs):
         # outputs are the outputs of every layer
-        raw_outputs, outputs = super(RNNDecoder, self).forward(inputs)
+        raw_outputs, outputs = super(EmbeddingRNNDecoder, self).forward(inputs)
         # we project only the output of the last layer
         if self.projection_layer is not None:
             outputs[-1] = self.projection_layer(outputs[-1])

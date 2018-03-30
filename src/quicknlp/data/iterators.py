@@ -18,35 +18,35 @@ class HierarchicalIterator(BucketIterator):
         self.target_roles = None if target_roles == "all" else target_roles
         super(HierarchicalIterator, self).__init__(dataset=dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
 
-    def process_minibatch(self, minibatch: List[Example]) -> Tuple[LT, LT]:
+    def process_minibatch(self, minibatch: List[Example]) -> Tuple[LT, LT, LT]:
         text_field = self.dataset.fields["text"]
         max_sl = max([max(ex.sl) for ex in minibatch])
-        max_conv = max([len(ex.roles) for ex in minibatch]) + 1  # add extra padding for the target
+        max_conv = max([len(ex.roles) for ex in minibatch]) + 1  # add extra padding sentence for the target
         padded_examples, padded_targets, padded_lengths, padded_roles = [], [], [], []
         for example in minibatch:
-            examples, lens, roles = self.pad(example, max_sl, max_conv, field=text_field)
+            examples, lens, roles = self.pad(example, max_sl=max_sl, max_conv=max_conv, field=text_field)
             padded_examples.extend(examples)
             padded_lengths.extend(lens)
             padded_roles.append(roles)
             # if self.target_roles is not None we will pad the roles we do not want to train on
             # this allows for learning only the responses we are interested in
-            targets, *_ = self.pad(example, max_sl, max_conv, field=text_field,
+            targets, *_ = self.pad(example, max_sl=max_sl, max_conv=max_conv, field=text_field,
                                    target_roles=self.target_roles)
             padded_targets.extend(targets)
 
         text_field.include_lengths = False
 
         data = text_field.numericalize(padded_examples, device=self.device, train=self.train)
-        data = data.view(max_sl, self.batch_size, max_conv).transpose(2, 0).transpose(2, 1).contiguous()
-        source = data[:-1]
-
+        batch_size = len(minibatch)
+        assert_dims(data, [max_sl, max_conv * batch_size])
+        data = data.view(max_sl, batch_size, max_conv).transpose(2, 0).transpose(2, 1).contiguous()
+        source = data[:-1]  # we remove the extra padding  sentence added here
         targets = text_field.numericalize(padded_targets, device=self.device, train=self.train)
-        targets = targets.view(max_sl, self.batch_size, max_conv).transpose(2, 0).transpose(2, 1).contiguous()
-        targets = targets[1:]
+        targets = targets.view(max_sl, batch_size, max_conv).transpose(2, 0).transpose(2, 1).contiguous()
         # shapes will be max_conv -1 , max_sl, batch_size
-        assert_dims(source, [max_conv - 1, max_sl, self.batch_size])
-        assert_dims(targets, [max_conv - 1, max_sl, self.batch_size])
-        return source, targets
+        assert_dims(source, [max_conv - 1, max_sl, batch_size])
+        assert_dims(targets, [max_conv, max_sl, batch_size])
+        return source, targets[1:], targets[1:, 1:]
 
     def __iter__(self):
         """Same iterator almost as bucket iterator"""
@@ -64,11 +64,12 @@ class HierarchicalIterator(BucketIterator):
                     else:
                         minibatch.sort(key=self.sort_key, reverse=True)
 
-                context, response = self.process_minibatch(minibatch)
-                yield Batch.fromvars(dataset=self.dataset, batch_size=self.batch_size,
+                context, response, targets = self.process_minibatch(minibatch)
+                yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
                                      train=self.train,
                                      context=context,
-                                     response=response
+                                     response=response,
+                                     targets=targets
                                      )
             if not self.repeat:
                 raise StopIteration

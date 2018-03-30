@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
 from torchtext.data import Field
 
+from quicknlp import HierarchicalModelData
 from quicknlp.data import TabularDatasetFromFiles
 from quicknlp.data.data_loaders import S2SDataLoader
 from quicknlp.data.datasets import HierarchicalDatasetFromDataFrame
@@ -15,7 +18,8 @@ TRAIN_DATA = \
     """
 
 HIERARCHICAL_TRAIN_DATA = \
-    """chat_1\t0\thello\trole1
+    """chat_id\tindex\ttext\trole
+    chat_1\t0\thello\trole1
     chat_1\t1\thello\trole2
     chat_1\t2\tI need help\trole1
     chat_1\t3\tHow can I help you\trole2
@@ -48,13 +52,13 @@ def hierarchical_data(tmpdir):
     test_data = test.join("data.tsv")
     with test_data.open("w") as fh:
         fh.write(htr)
-    return str(data_dir), str(train), str(valid), str(test)
+    return Path(str(data_dir)), str(train.basename), str(valid.basename), str(test.basename)
 
 
 @pytest.fixture()
 def hierarchical_dataset(hierarchical_data):
     path, train, valid, test = hierarchical_data
-    df = pd.read_csv(train + "/data.tsv", header=None, sep="\t")
+    df = pd.read_csv(path / train / "data.tsv", header=None, sep="\t")
     df.columns = ["chat_id", "timestamp", "text", "role"]
     field = Field(init_token="__init__", eos_token="__eos__", lower=True)
     return HierarchicalDatasetFromDataFrame(df=df, text_field=field, batch_col="chat_id",
@@ -79,7 +83,7 @@ def s2smodel_data(tmpdir):
     test_data = test.join("data.tsv")
     with test_data.open("w") as fh:
         fh.write(td)
-    return str(data_dir), str(train), str(valid), str(test)
+    return Path(str(data_dir)), str(train.basename), str(valid.basename), str(test.basename)
 
 
 @pytest.fixture()
@@ -109,3 +113,19 @@ def s2smodel(s2smodel_data):
     return S2SModelData.from_text_files(path=path, source_names=["english", "german"],
                                         target_names=["german"],
                                         train=train, validation=valid, test=None, fields=fields, bs=2)
+
+
+@pytest.fixture
+def hredmodel(hierarchical_data):
+    field = Field(init_token="__init__", eos_token="__eos__", lower=True)
+    path, train, valid, test = hierarchical_data
+    cols = {"text_col": "text", "sort_col": "index", "batch_col": "chat_id", "role_col": "role"}
+    return HierarchicalModelData.from_text_files(path=path, text_field=field,
+                                                 train=train,
+                                                 validation=valid,
+                                                 test=None,
+                                                 bs=2,
+                                                 target_names=None,
+                                                 file_format="tsv",
+                                                 **cols
+                                                 )

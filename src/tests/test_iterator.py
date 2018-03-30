@@ -1,6 +1,7 @@
 import pytest
 
 from quicknlp.data.iterators import HierarchicalIterator
+from quicknlp.utils import assert_dims
 
 
 @pytest.fixture()
@@ -40,9 +41,10 @@ def test_hierarchical_iterator_process_minibatch(hiterator):
     minibatch = iterator.dataset[:bs]
     cl = max([len(ex.roles) for ex in minibatch])
     sl = max([sl for ex in minibatch for sl in ex.sl])
-    x, y = iterator.process_minibatch(minibatch)
-    assert (cl, sl, bs) == x.shape
-    assert (cl, sl, bs) == y.shape
+    x0, x1, y = iterator.process_minibatch(minibatch)
+    assert_dims(x0, [cl, sl, bs])
+    assert_dims(x1, [cl, sl, bs])
+    assert_dims(y, [cl, sl - 1, bs])
 
 
 def test_hierarchical_iterator(hiterator):
@@ -51,9 +53,11 @@ def test_hierarchical_iterator(hiterator):
     # Then I expect every batch to have a source and target
     dliter = iter(iterator)
     batch = next(dliter)
-    assert 2 == batch.batch_size
     # and I expect the features to be 3D [conv_length, sequence_length, batch_size]
     assert len(batch.context.shape) == 3
     assert len(batch.response.shape) == 3
-    # and i expect the first response to equal the second conversation utterance
-    assert (batch.context[1, :, :] == batch.response[0, :, :]).all()
+
+    assert_dims(batch.context, [None, None, batch.batch_size])
+    assert_dims(batch.response, [None, None, batch.batch_size])
+    assert_dims(batch.targets, [None, None, batch.batch_size])
+    assert (batch.response[:, 1:] == batch.targets).all()

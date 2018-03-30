@@ -2,10 +2,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from fastai.core import T, V, to_np, to_gpu
 from numpy.testing import assert_allclose
 
-from fastai.core import T, V, to_np, to_gpu
-from quicknlp.modules import RNNDecoder
+from quicknlp.modules import EmbeddingRNNDecoder
 from quicknlp.modules.decoder import RNNAttentionDecoder
 from quicknlp.modules.decoder.basic_decoder import select_hidden_by_index, reshape_parent_indices
 from quicknlp.modules.projection import Projection, AttentionProjection
@@ -56,11 +56,11 @@ def rnn_decoder(decoder_params):
                                                        dropout=0.0)
 
     else:
-        decoder = RNNDecoder(cell_type="gru", ntoken=decoder_params.ntokens,
-                             emb_sz=decoder_params.emb_size, nhid=decoder_params.nhid,
-                             nlayers=decoder_params.nlayers,
-                             pad_token=1, eos_token=2,
-                             max_tokens=decoder_params.max_tokens)
+        decoder = EmbeddingRNNDecoder(cell_type="gru", ntoken=decoder_params.ntokens,
+                                      emb_sz=decoder_params.emb_size, nhid=decoder_params.nhid,
+                                      nlayers=decoder_params.nlayers,
+                                      pad_token=1, eos_token=2,
+                                      max_tokens=decoder_params.max_tokens)
         decoder.projection_layer = Projection(n_out=decoder_params.ntokens,
                                               n_in=decoder_params.emb_size, tie_encoder=None, dropout=0.0)
     decoder = to_gpu(decoder)

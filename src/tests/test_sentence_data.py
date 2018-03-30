@@ -19,7 +19,7 @@ def test_S2SModelLoader(s2smodel_data):
         ("french", Field(init_token="__init__", eos_token="__eos__", lower=True)),
         ("german", Field(init_token="__init__", eos_token="__eos__", lower=True))
     ]
-    ds = TabularDatasetFromFiles(path=train, fields=fields)
+    ds = TabularDatasetFromFiles(path=path / train, fields=fields)
     for name, field in fields:
         field.build_vocab(ds)
     bs = 2
