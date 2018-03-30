@@ -4,7 +4,7 @@ from torchtext.data import Field
 from quicknlp.data.datasets import HierarchicalDatasetFromDataFrame
 
 
-def test_TabularDatasetFromDataFrame(hierarchical_data):
+def test_tabular_dataset_from_dataframe(hierarchical_data):
     path, train, valid, test = hierarchical_data
     df = pd.read_csv(path / train / "data.tsv", header=None, sep="\t")
     df.columns = ["chat_id", "timestamp", "text", "role"]
