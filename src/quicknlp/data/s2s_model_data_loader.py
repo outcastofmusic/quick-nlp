@@ -3,13 +3,13 @@ from typing import Callable, List, Optional, Union
 
 import numpy as np
 import pandas as pd
-from torch import optim
-from torchtext.data import Dataset, Field
-
 from fastai.core import SingleModel, VV, to_gpu, to_np
 from fastai.dataset import ModelData
 from fastai.learner import Learner, load_model, save_model
-from quicknlp.data.data_loaders import S2SModelLoader
+from torch import optim
+from torchtext.data import Dataset, Field
+
+from quicknlp.data.data_loaders import S2SDataLoader
 from quicknlp.modules import Seq2Seq
 from quicknlp.modules.seq2seq import s2sloss
 from quicknlp.modules.seq2seq_attention import Seq2SeqAttention
@@ -79,7 +79,7 @@ class S2SModelData(ModelData):
 
     """
 
-    def itos(self, tokens: Union[List[np.ndarray], np.ndarray], field_name: str) -> List[str]:
+    def itos(self, tokens: Union[List[np.ndarray], np.ndarray], field_name: str) -> List[List[str]]:
         if not isinstance(tokens, list):
             tokens = [tokens]
         results = []
@@ -145,9 +145,9 @@ class S2SModelData(ModelData):
         self.pad_idx = fields[0][1].vocab.stoi[fields[0][1].pad_token]
         self.eos_idx = fields[0][1].vocab.stoi[fields[0][1].eos_token]
 
-        trn_dl, val_dl, test_dl = [S2SModelLoader(ds, bs, source_names=source_names,
-                                                  target_names=target_names, sort_key=sort_key,
-                                                  )
+        trn_dl, val_dl, test_dl = [S2SDataLoader(ds, bs, source_names=source_names,
+                                                 target_names=target_names, sort_key=sort_key,
+                                                 )
                                    if ds is not None else None
                                    for ds in (trn_ds, val_ds, test_ds)]
         super(S2SModelData, self).__init__(path=path, trn_dl=trn_dl, val_dl=val_dl, test_dl=test_dl)

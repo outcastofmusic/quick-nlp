@@ -1,11 +1,11 @@
-from quicknlp.data.data_loaders import HierarchicalModelLoader
+from quicknlp.data.data_loaders import HierarchicalDataLoader
 
 
-def test_hierarchal_model_loader(hierarchical_dataset):
+def test_hierarchical_data_loader(hierarchical_dataset):
     # When I crate a Hierarchical Model loader
     ds, field = hierarchical_dataset
     field.build_vocab(ds)
-    dl = HierarchicalModelLoader(ds, batch_size=2, target_names=["role2"])
+    dl = HierarchicalDataLoader(ds, batch_size=2, target_names=["role2"])
 
     # Then I expect every batch to have a context and a response
     for batch in dl:

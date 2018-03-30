@@ -5,6 +5,8 @@ import numpy as np
 from torch import LongTensor
 from torchtext.data import BucketIterator, Batch, Field
 
+from quicknlp.utils import assert_dims
+
 Conversations = List[List[str]]
 Roles = List[str]
 Lengths = List[int]
@@ -26,6 +28,8 @@ class HierarchicalIterator(BucketIterator):
             padded_examples.extend(examples)
             padded_lengths.extend(lens)
             padded_roles.append(roles)
+            # if self.target_roles is not None we will pad the roles we do not want to train on
+            # this allows for learning only the responses we are interested in
             targets, *_ = self.pad(example, max_sl, max_conv, field=text_field,
                                    target_roles=self.target_roles)
             padded_targets.extend(targets)
@@ -39,6 +43,9 @@ class HierarchicalIterator(BucketIterator):
         targets = text_field.numericalize(padded_targets, device=self.device, train=self.train)
         targets = targets.view(max_sl, self.batch_size, max_conv).transpose(2, 0).transpose(2, 1).contiguous()
         targets = targets[1:]
+        # shapes will be max_conv -1 , max_sl, batch_size
+        assert_dims(source, [max_conv - 1, max_sl, self.batch_size])
+        assert_dims(targets, [max_conv - 1, max_sl, self.batch_size])
         return source, targets
 
     def __iter__(self):

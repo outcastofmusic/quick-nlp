@@ -2,10 +2,10 @@ from typing import Union, List, Optional, Callable
 
 import numpy as np
 import pandas as pd
+from fastai.dataset import ModelData
 from torchtext.data import Dataset, Field
 
-from fastai.dataset import ModelData
-from .data_loaders import HierarchicalModelLoader
+from .data_loaders import HierarchicalDataLoader
 from .datasets import HierarchicalDatasetFromDataFrame, HierarchicalDatasetFromFiles
 
 
@@ -69,7 +69,7 @@ class HierarchicalModelData(ModelData):
         self.pad_idx = text_field.vocab.stoi[text_field.pad_token]
         self.eos_idx = text_field.vocab.stoi[text_field.eos_token]
 
-        trn_dl, val_dl, test_dl = [HierarchicalModelLoader(ds, bs, target_names=target_names, sort_key=sort_key)
+        trn_dl, val_dl, test_dl = [HierarchicalDataLoader(ds, bs, target_names=target_names, sort_key=sort_key)
                                    if ds is not None else None
                                    for ds in (trn_ds, val_ds, test_ds)]
         super(HierarchicalModelData, self).__init__(path=path, trn_dl=trn_dl, val_dl=val_dl, test_dl=test_dl)

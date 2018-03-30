@@ -4,7 +4,7 @@ from torch.optim import Adam
 from torchtext.data import Field
 
 from quicknlp.data import TabularDatasetFromFiles
-from quicknlp.data.data_loaders import S2SModelLoader
+from quicknlp.data.data_loaders import S2SDataLoader
 from quicknlp.data.s2s_model_data_loader import S2SModelData
 from quicknlp.utils import assert_dims
 
@@ -23,7 +23,7 @@ def test_S2SModelLoader(s2smodel_data):
     for name, field in fields:
         field.build_vocab(ds)
     bs = 2
-    ml = S2SModelLoader(dataset=ds, batch_size=bs, source_names=["english", "french"], target_names=["french"])
+    ml = S2SDataLoader(dataset=ds, batch_size=bs, source_names=["english", "french"], target_names=["french"])
     assert len(ml) == 200
     index = 0
     for index, (*X, Y) in enumerate(ml):

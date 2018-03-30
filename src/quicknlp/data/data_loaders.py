@@ -5,7 +5,7 @@ from torchtext.data import Dataset, BucketIterator
 from quicknlp.data.iterators import HierarchicalIterator
 
 
-class S2SModelLoader:
+class S2SDataLoader:
     """Instance of ModelLoader. It is an iterator that buckets the data in batches of similar sizes based on
        a sort_key and iterates through the batches.
 
@@ -38,7 +38,7 @@ class S2SModelLoader:
         return len(self.dl)
 
 
-class HierarchicalModelLoader:
+class HierarchicalDataLoader:
     """Loads Hierarchical data into batches, including source and target"""
 
     def __init__(self, dataset: Dataset, batch_size: int, target_names: List[str],

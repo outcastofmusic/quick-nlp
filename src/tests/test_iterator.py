@@ -46,7 +46,7 @@ def test_hierarchical_iterator_process_minibatch(hiterator):
 
 
 def test_hierarchical_iterator(hiterator):
-    # When I crate a Hierarchical Model loader
+    # When I crate a Hierarchical Data loader
     iterator, field = hiterator
     # Then I expect every batch to have a source and target
     dliter = iter(iterator)

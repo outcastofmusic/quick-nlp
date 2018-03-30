@@ -38,10 +38,7 @@ class TabularDatasetFromFiles(Dataset):
 
     def __init__(self, path: str, fields: List[NamedField], encoding: str = 'utf-8', skip_header: bool = False,
                  **kwargs):
-        if os.path.isdir(path):
-            paths = glob(f'{path}/*.*')
-        else:
-            paths = [path]
+        paths = glob(f'{path}/*.*') if os.path.isdir(path) else [path]
         examples = []
         for path_ in paths:
             examples_from_file, fields = self.get_examples_from_file(path_, fields,
@@ -82,16 +79,26 @@ class HierarchicalDatasetFromDataFrame(Dataset):
 
     def __init__(self, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str, text_col: str,
                  role_col: str, sort_col: Optional[str] = None, **kwargs):
+        """
+
+        Args:
+            df (Union[pd.DataFrame, List[pd.DataFrame]]: A dataframe or a list of dataframes with the data
+            text_field (Field): a torchtext Field object that will process the tokenizations
+            batch_col (str): The name of the column in the data df that will be used to group the batches
+            text_col (str): The name of the column in the data containing the text data
+            role_col (str): The name of the column in the data containing the role/name of the person speaking
+            sort_col (str): The name of the column in the data that will be used to sort the data of every group
+            **kwargs:
+        """
         fields = [("text", text_field), ("roles", text_field)]
         examples = []
-        if not isinstance(df, list):
-            df = [df]
+        df = [df] if not isinstance(df, list) else df
         for _df in df:
             for chat_id, conversation in _df.groupby(batch_col):
                 if sort_col is not None:
                     conversation = conversation.sort_values(by=sort_col)
                 conversation_tokens = "__" + conversation[role_col] + "__"
-                text_with_roles = conversation_tokens + " " + conversation[text_col]
+                text_with_roles = (conversation_tokens + " " + conversation[text_col]).astype(str)
                 text_with_roles_length = text_with_roles.str.split().apply(len)
                 text = "".join(text_with_roles.str.cat(sep=" "))
                 roles = "".join(conversation_tokens.str.cat(sep=" "))
@@ -99,7 +106,7 @@ class HierarchicalDatasetFromDataFrame(Dataset):
                 example.sl = text_with_roles_length.tolist()
                 examples.append(example)
 
-            super(HierarchicalDatasetFromDataFrame, self).__init__(examples=examples, fields=fields, **kwargs)
+        super().__init__(examples=examples, fields=fields, **kwargs)
 
     @classmethod
     def splits(cls, train_df: Optional[pd.DataFrame] = None, val_df: Optional[pd.DataFrame] = None,
