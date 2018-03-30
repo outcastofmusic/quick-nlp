@@ -1,9 +1,8 @@
 from functools import partial
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional
 
-import numpy as np
 import pandas as pd
-from fastai.core import SingleModel, VV, to_gpu, to_np
+from fastai.core import SingleModel, to_gpu
 from fastai.dataset import ModelData
 from fastai.learner import Learner, load_model, save_model
 from torch import optim
@@ -14,25 +13,7 @@ from quicknlp.modules import Seq2Seq
 from quicknlp.modules.seq2seq import s2sloss
 from quicknlp.modules.seq2seq_attention import Seq2SeqAttention
 from .datasets import NamedField, TabularDatasetFromDataFrame, TabularDatasetFromFiles
-
-
-def check_columns_in_df(df: pd.DataFrame, columns: List[str]) -> bool:
-    if df is not None:
-        return (df.columns.union(columns) == df.columns).all()
-    else:
-        return True
-
-
-def predict_with_seq2seq(m, dl, num_beams=1):
-    m.eval()
-    if hasattr(m, 'reset'): m.reset()
-    res = []
-    for *x, y in iter(dl): res.append([x[0], m(*VV(x), num_beams=num_beams)[0], y])
-    inputa, preda, targa = zip(*res)
-    inputs = [to_np(inp) for inp in inputa]
-    predictions = [to_np(pred) for pred in preda]
-    targets = [to_np(targ) for targ in targa]
-    return predictions, targets, inputs
+from .model_helpers import PrintingMixin, check_columns_in_df, predict_with_seq2seq
 
 
 class S2SLearner(Learner):
@@ -69,7 +50,7 @@ class S2SLearner(Learner):
         return pr
 
 
-class S2SModelData(ModelData):
+class S2SModelData(ModelData, PrintingMixin):
     """
     This class provides the entrypoing for dealing with supported NLP S2S Tasks, i.e. tasks where each sample involves
     multiple sentences, e.g. Translation, Q/A etc.
@@ -78,39 +59,6 @@ class S2SModelData(ModelData):
     3. Use stoi, itos functions to quickly convert between tokens and sentences
 
     """
-
-    def itos(self, tokens: Union[List[np.ndarray], np.ndarray], field_name: str) -> List[List[str]]:
-        if not isinstance(tokens, list):
-            tokens = [tokens]
-        results = []
-        field = self.trn_ds.fields[field_name]
-        for token_batch in tokens:
-            # token batch has dims [sl, bs, nb]
-            token_batch = np.atleast_3d(token_batch)
-            batch = []
-            # bb is one batch
-            for bb in token_batch.transpose(1, 2, 0):
-                # one row is one beam for the batch
-                beams = []
-                for row in bb:
-                    words = [field.vocab.itos[i] for i in row]
-                    if field.eos_token in words:
-                        words = words[:words.index(field.eos_token)]
-                    elif field.pad_token in words:
-                        words = words[:words.index(field.pad_token)]
-                    beams.append(" ".join(words[1:]))
-                batch.append(beams)
-            results.append(batch)
-        return results
-
-    def stoi(self, sentences: List[str], field_name: str) -> np.ndarray:
-        results = []
-        for sentence in sentences:
-            sentence = self.trn_ds.fields[field_name].preprocess(sentence)
-            sentence = self.trn_ds.fields[field_name].tokenize(sentence)
-            tokens = [self.trn_ds.fields[field_name].vocab.stoi(i) for i in sentence]
-            results.append(tokens)
-        return np.asarray(results)
 
     def __init__(self, path: str, fields: List[NamedField], source_names: List[str], target_names: List[str],
                  trn_ds: Dataset, val_ds: Dataset, test_ds: Dataset, bs: int,
@@ -151,6 +99,7 @@ class S2SModelData(ModelData):
                                    if ds is not None else None
                                    for ds in (trn_ds, val_ds, test_ds)]
         super(S2SModelData, self).__init__(path=path, trn_dl=trn_dl, val_dl=val_dl, test_dl=test_dl)
+        self.fields = trn_ds.fields
 
     @property
     def sz(self):

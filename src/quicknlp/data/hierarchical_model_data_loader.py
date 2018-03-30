@@ -1,15 +1,15 @@
-from typing import Union, List, Optional, Callable
+from typing import List, Optional, Callable
 
-import numpy as np
 import pandas as pd
 from fastai.dataset import ModelData
 from torchtext.data import Dataset, Field
 
 from .data_loaders import HierarchicalDataLoader
 from .datasets import HierarchicalDatasetFromDataFrame, HierarchicalDatasetFromFiles
+from .model_helpers import PrintingMixin
 
 
-class HierarchicalModelData(ModelData):
+class HierarchicalModelData(ModelData, PrintingMixin):
     """
     This class provides the entry point for dealing with supported NLP Hierarchical Tasks, i.e. tasks where each sample involves
     sequences of sentences e.g. dialogues etc.
@@ -18,25 +18,6 @@ class HierarchicalModelData(ModelData):
     3. Use stoi, itos functions to quickly convert between tokens and sentences
 
     """
-
-    def itos(self, tokens: Union[List[np.ndarray], np.ndarray], field_name: str) -> List[str]:
-        if not isinstance(tokens, list):
-            tokens = [tokens]
-        results = []
-        for token_batch in tokens:
-            token_batch = np.atleast_2d(token_batch)
-            for row in token_batch.T:
-                results.append(" ".join([self.trn_ds.fields[field_name].vocab.itos[i] for i in row]))
-        return results
-
-    def stoi(self, sentences: List[str], field_name: str) -> np.ndarray:
-        results = []
-        for sentence in sentences:
-            sentence = self.trn_ds.fields[field_name].preprocess(sentence)
-            sentence = self.trn_ds.fields[field_name].tokenize(sentence)
-            tokens = [self.trn_ds.fields[field_name].vocab.stoi(i) for i in sentence]
-            results.append(tokens)
-        return np.asarray(results)
 
     def __init__(self, path: str, text_field: Field, target_names: List[str],
                  trn_ds: Dataset, val_ds: Dataset, test_ds: Dataset, bs: int,
@@ -72,7 +53,8 @@ class HierarchicalModelData(ModelData):
         trn_dl, val_dl, test_dl = [HierarchicalDataLoader(ds, bs, target_names=target_names, sort_key=sort_key)
                                    if ds is not None else None
                                    for ds in (trn_ds, val_ds, test_ds)]
-        super(HierarchicalModelData, self).__init__(path=path, trn_dl=trn_dl, val_dl=val_dl, test_dl=test_dl)
+        super().__init__(path=path, trn_dl=trn_dl, val_dl=val_dl, test_dl=test_dl)
+        self.fields = trn_ds.fields
 
     @property
     def sz(self):

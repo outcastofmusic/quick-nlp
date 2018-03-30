@@ -5,6 +5,7 @@ from typing import List, Tuple, Optional, Union
 
 import pandas as pd
 from torchtext.data import Dataset, Example, Field
+from tqdm import tqdm
 
 NamedField = Tuple[str, Field]
 
@@ -75,10 +76,30 @@ class TabularDatasetFromDataFrame(Dataset):
         return tuple(d for d in (train_data, val_data, test_data) if d is not None)
 
 
+def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]], batch_col: str,
+                            role_col: str, text_col: str, sort_col: str) -> List[Example]:
+    """convert df to dialogue examples"""
+    df = [df] if not isinstance(df, list) else df
+    examples = []
+    for _df in df:
+        for chat_id, conversation in tqdm(_df.groupby(batch_col)):
+            if conversation[role_col].nunique() > 1:
+                conversation = conversation.sort_values(by=sort_col)
+                conversation_tokens = "__" + conversation[role_col] + "__"
+                text_with_roles = (conversation_tokens + " " + conversation[text_col]).astype(str)
+                text_with_roles_length = text_with_roles.str.split().apply(len)
+                text = "".join(text_with_roles.str.cat(sep=" "))
+                roles = "".join(conversation_tokens.str.cat(sep=" "))
+                example = Example.fromlist([text, roles], fields)
+                example.sl = text_with_roles_length.tolist()
+                examples.append(example)
+    return examples
+
+
 class HierarchicalDatasetFromDataFrame(Dataset):
 
     def __init__(self, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str, text_col: str,
-                 role_col: str, sort_col: Optional[str] = None, **kwargs):
+                 role_col: str, sort_col: str, **kwargs):
         """
 
         Args:
@@ -91,22 +112,8 @@ class HierarchicalDatasetFromDataFrame(Dataset):
             **kwargs:
         """
         fields = [("text", text_field), ("roles", text_field)]
-        examples = []
-        df = [df] if not isinstance(df, list) else df
-        for _df in df:
-            for chat_id, conversation in _df.groupby(batch_col):
-                if conversation[role_col].nunique() > 1:
-                    if sort_col is not None:
-                        conversation = conversation.sort_values(by=sort_col)
-                    conversation_tokens = "__" + conversation[role_col] + "__"
-                    text_with_roles = (conversation_tokens + " " + conversation[text_col]).astype(str)
-                    text_with_roles_length = text_with_roles.str.split().apply(len)
-                    text = "".join(text_with_roles.str.cat(sep=" "))
-                    roles = "".join(conversation_tokens.str.cat(sep=" "))
-                    example = Example.fromlist([text, roles], fields)
-                    example.sl = text_with_roles_length.tolist()
-                    examples.append(example)
-
+        examples = df_to_dialogue_examples(df, fields=fields, batch_col=batch_col, role_col=role_col,
+                                           sort_col=sort_col, text_col=text_col)
         super().__init__(examples=examples, fields=fields, **kwargs)
 
     @classmethod
@@ -133,9 +140,8 @@ class HierarchicalDatasetFromFiles(HierarchicalDatasetFromDataFrame):
                  sort_col: Optional[str] = None, encoding: Optional[str] = None, **kwargs):
         paths = glob(f'{path}/*.*') if os.path.isdir(path) else [path]
         dfs = load_dfs(paths, format=file_format, encoding=encoding)
-        super(HierarchicalDatasetFromFiles, self).__init__(df=dfs, text_field=text_field,
-                                                           batch_col=batch_col, text_col=text_col,
-                                                           role_col=role_col, sort_col=sort_col, **kwargs)
+        super().__init__(df=dfs, text_field=text_field, batch_col=batch_col, text_col=text_col, role_col=role_col,
+                         sort_col=sort_col, **kwargs)
 
     @classmethod
     def splits(cls, path: str, train_path: Optional[str] = None, val_path: Optional[str] = None,
