@@ -65,10 +65,10 @@ class HierarchicalIterator(BucketIterator):
                         minibatch.sort(key=self.sort_key, reverse=True)
 
                 context, response, targets = self.process_minibatch(minibatch)
-                for index in range(1, context.shape[0]):
+                for index in range(context.shape[0]):
                     yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
                                          train=self.train,
-                                         context=context[:index],
+                                         context=context[:index + 1],
                                          response=response[index],
                                          targets=targets[index]
                                          )
