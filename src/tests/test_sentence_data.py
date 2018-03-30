@@ -1,8 +1,8 @@
 import pytest
+from fastai.core import to_np
 from torch.optim import Adam
 from torchtext.data import Field
 
-from fastai.core import to_np
 from quicknlp.data import TabularDatasetFromFiles
 from quicknlp.data.data_loaders import S2SModelLoader
 from quicknlp.data.s2s_model_data_loader import S2SModelData
@@ -67,11 +67,7 @@ def test_S2SModelData_from_file(generalmodel):
     for batch_sentences in actual_sentences:
         for beam_sentence in batch_sentences:
             for sentence in beam_sentence:
-                assert sentence in ["__init__ goodbye __eos__",
-                                    "__init__ hello __eos__",
-                                    "__init__ i like to read __eos__",
-                                    "__init__ i am hungry __eos__"
-                                    ]
+                assert sentence in {"goodbye", "hello", "i like to read", "i am hungry"}
 
 
 def test_S2SModelData_learner(s2smodel):
@@ -93,7 +89,8 @@ def test_S2SModelData_learner(s2smodel):
     assert len(text_results) == len(predict_results)
     assert len(text_results[0]) == predict_results[0].shape[1]
     assert len(text_results[0][0]) == predict_results[0].shape[2]
-    assert len(text_results[0][0][0].split()) == predict_results[0].shape[0]
+    # sos token at the beginning is removed so the number of tokens should be equal to shape[0] -1
+    assert len(text_results[0][0][0].split()) == predict_results[0].shape[0] - 1
 
 
 def test_S2SModelData_learner_summary(s2smodel):
