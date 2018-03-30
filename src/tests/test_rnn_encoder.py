@@ -1,7 +1,7 @@
 import numpy as np
 from fastai.core import V, T, to_gpu, to_np
 
-from quicknlp.modules import EmbeddingRNNEncoder
+from quicknlp.modules.submodules import EmbeddingRNNEncoder
 
 
 def test_BiRNNEncoder():

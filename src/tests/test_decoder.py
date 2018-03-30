@@ -5,10 +5,8 @@ import pytest
 from fastai.core import T, V, to_np, to_gpu
 from numpy.testing import assert_allclose
 
-from quicknlp.modules import EmbeddingRNNDecoder
-from quicknlp.modules.decoder import RNNAttentionDecoder
-from quicknlp.modules.decoder.basic_decoder import select_hidden_by_index, reshape_parent_indices
-from quicknlp.modules.projection import Projection, AttentionProjection
+from quicknlp.modules.submodules import EmbeddingRNNDecoder, RNNAttentionDecoder, Projection, AttentionProjection
+from quicknlp.modules.submodules.basic_decoder import select_hidden_by_index, reshape_parent_indices
 from quicknlp.utils import assert_dims
 
 params_to_try = [

@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
-
 from fastai.core import T, V, to_gpu, to_np
-from quicknlp.modules.projection import AttentionProjection
+
+from quicknlp.modules.submodules import AttentionProjection
 from quicknlp.utils import assert_dims
 
 params = [(300, 300)]

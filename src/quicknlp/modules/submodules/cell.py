@@ -1,8 +1,7 @@
 import torch.nn as nn
-from torch.autograd import Variable
-
 from fastai.core import to_gpu
 from fastai.rnn_reg import WeightDrop
+from torch.autograd import Variable
 
 
 class Cell(nn.Module):
@@ -19,7 +18,8 @@ class Cell(nn.Module):
             self.cell = nn.GRU(input_size, output_size, num_layers=nlayers, bidirectional=bidir, dropout=dropouth)
         else:
             raise NotImplementedError(f"cell: {cell_type} not supported")
-        if wdrop: self.cell = WeightDrop(self.cell, wdrop)
+        if wdrop:
+            self.cell = WeightDrop(self.cell, wdrop)
         self.reset(bs=1)
 
     def forward(self, inputs, hidden):

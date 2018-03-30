@@ -71,7 +71,8 @@ class RNNEncoder(nn.Module):
                 raw_output, new_h = rnn(raw_output, self.hidden[layer_index])
             new_hidden.append(new_h)
             raw_outputs.append(raw_output)
-            if layer_index != self.nlayers - 1: raw_output = drop(raw_output)
+            if layer_index != self.nlayers - 1:
+                raw_output = drop(raw_output)
             outputs.append(raw_output)
 
         self.hidden = new_hidden

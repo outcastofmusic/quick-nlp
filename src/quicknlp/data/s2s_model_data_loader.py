@@ -25,9 +25,11 @@ class S2SLearner(Learner):
         super().__init__(data, models, **kwargs)
         self.crit = self.s2sloss
 
-    def save_encoder(self, name): save_model(self.model[0], self.get_model_path(name))
+    def save_encoder(self, name):
+        save_model(self.model[0], self.get_model_path(name))
 
-    def load_encoder(self, name): load_model(self.model[0], self.get_model_path(name))
+    def load_encoder(self, name):
+        load_model(self.model[0], self.get_model_path(name))
 
     def predict_with_targs(self, is_test=False):
         return self.predict_with_targs_and_inputs(is_test=is_test)[:2]
@@ -88,7 +90,8 @@ class S2SModelData(ModelData, PrintingMixin):
         self.bs = bs
         self.nt = dict()
         for index, (name, field) in enumerate(fields):
-            if not hasattr(field, 'vocab'): field.build_vocab(trn_ds, **kwargs)
+            if not hasattr(field, 'vocab'):
+                field.build_vocab(trn_ds, **kwargs)
             self.nt[name] = len(field.vocab)
         self.pad_idx = fields[0][1].vocab.stoi[fields[0][1].pad_token]
         self.eos_idx = fields[0][1].vocab.stoi[fields[0][1].eos_token]

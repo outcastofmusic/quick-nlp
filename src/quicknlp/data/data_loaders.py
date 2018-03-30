@@ -18,7 +18,8 @@ class S2SDataLoader:
         self.target_names = target_names
         # sort by the first field if no sort key is given
         if sort_key is None:
-            sort_key = lambda x: getattr(x, self.source_names[0])
+            def sort_key(x):
+                return getattr(x, self.source_names[0])
         self.dl = BucketIterator(dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
         self.bs = batch_size
         self.iter = 0
@@ -26,7 +27,8 @@ class S2SDataLoader:
     def __iter__(self):
         self.iter = 0
         for batch in self.dl:
-            if self.iter >= len(self): raise StopIteration
+            if self.iter >= len(self):
+                raise StopIteration
             source = [getattr(batch, name) for name in self.source_names]
             # target should start from the second token for S2S
             target = [getattr(batch, name)[1:] for name in self.target_names]
@@ -48,7 +50,8 @@ class HierarchicalDataLoader:
         # sort by the first field if no sort key is given
         if sort_key is None:
             # The default sorting is done by conversation length
-            sort_key = lambda x: len(x.roles)
+            def sort_key(x):
+                return x.roles
         self.dl = HierarchicalIterator(dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
         self.bs = batch_size
         self.iter = 0
@@ -56,7 +59,8 @@ class HierarchicalDataLoader:
     def __iter__(self):
         self.iter = 0
         for batch in self.dl:
-            if self.iter >= len(self): raise StopIteration
+            if self.iter >= len(self):
+                raise StopIteration
             yield [batch.context, batch.response, batch.targets]
             self.iter += 1
 

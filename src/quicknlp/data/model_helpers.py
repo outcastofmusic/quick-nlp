@@ -57,9 +57,11 @@ def check_columns_in_df(df: pd.DataFrame, columns: List[str]) -> bool:
 
 def predict_with_seq2seq(m, dl, num_beams=1):
     m.eval()
-    if hasattr(m, 'reset'): m.reset()
+    if hasattr(m, 'reset'):
+        m.reset()
     res = []
-    for *x, y in iter(dl): res.append([x[0], m(*VV(x), num_beams=num_beams)[0], y])
+    for *x, y in iter(dl):
+        res.append([x[0], m(*VV(x), num_beams=num_beams)[0], y])
     inputa, preda, targa = zip(*res)
     inputs = [to_np(inp) for inp in inputa]
     predictions = [to_np(pred) for pred in preda]

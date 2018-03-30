@@ -1,10 +1,8 @@
 import torch.nn as nn
 
-from quicknlp.modules.decoder import RNNAttentionDecoder
-from quicknlp.modules.projection import AttentionProjection
 from quicknlp.utils import assert_dims
-from .rnn_encoder import EmbeddingRNNEncoder
 from .seq2seq import Seq2Seq, HParam, get_list
+from .submodules import RNNAttentionDecoder, EmbeddingRNNEncoder, AttentionProjection
 
 
 class AttentionProjectionLayer(nn.Module):

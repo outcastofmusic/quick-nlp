@@ -45,7 +45,8 @@ class HierarchicalModelData(ModelData, PrintingMixin):
         """
 
         self.bs = bs
-        if not hasattr(text_field, 'vocab'): text_field.build_vocab(trn_ds, **kwargs)
+        if not hasattr(text_field, 'vocab'):
+            text_field.build_vocab(trn_ds, **kwargs)
         self.nt = len(text_field.vocab)
         self.pad_idx = text_field.vocab.stoi[text_field.pad_token]
         self.eos_idx = text_field.vocab.stoi[text_field.eos_token]
@@ -130,6 +131,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             batch_col (str): The name of the column with the hierarchical groups, e.g. conversation ids
             sort_col (str): A column to sort the text for every batch_col, e.g. timestamps
             role_col (str): A column with the role of the person saying every text
+            file_format (str): The format of the file e.g. csv, json, tsv
             bs (Optional[int]): the batch size
             sort_key (Optional[Callable]): A function to sort the examples in batch size based on a field
             **kwargs:

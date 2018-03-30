@@ -3,8 +3,7 @@ from typing import List, Union
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quicknlp.modules import EmbeddingRNNDecoder, EmbeddingRNNEncoder
-from quicknlp.modules.projection import Projection
+from quicknlp.modules.submodules import EmbeddingRNNDecoder, EmbeddingRNNEncoder, Projection
 from quicknlp.utils import get_list, concat_bidir_state, assert_dims
 
 HParam = Union[List[int], int]

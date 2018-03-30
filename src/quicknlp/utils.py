@@ -4,9 +4,8 @@ from typing import List, Tuple, Optional, Union, Sequence
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
-
 from fastai.core import to_gpu
+from torch.autograd import Variable
 
 States = List[Tuple[torch.Tensor, torch.Tensor]]
 
@@ -74,7 +73,8 @@ def model_summary(m, input_size, dtype=float):
             x = [to_gpu(Variable(torch.rand(1, *input_size) * 2))]
     m(*x)
 
-    for h in hooks: h.remove()
+    for h in hooks:
+        h.remove()
     return summary
 
 

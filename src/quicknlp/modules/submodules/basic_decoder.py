@@ -4,8 +4,8 @@ import torch
 import torch.nn.functional as F
 from fastai.core import V, to_gpu
 
-from quicknlp.modules.rnn_encoder import EmbeddingRNNEncoder
 from quicknlp.utils import assert_dims
+from .rnn_encoder import EmbeddingRNNEncoder
 
 
 def repeat_cell_state(hidden, num_beams):

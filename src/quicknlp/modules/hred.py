@@ -4,9 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quicknlp.modules import EmbeddingRNNEncoder, RNNEncoder, EmbeddingRNNDecoder
-from quicknlp.modules.projection import Projection
 from quicknlp.utils import get_list, assert_dims
+from .submodules import EmbeddingRNNEncoder, RNNEncoder, EmbeddingRNNDecoder, Projection
 
 HParam = Union[List[int], int]
 
@@ -82,10 +81,11 @@ class HRED(nn.Module):
         self.session_encoder.reset(bs)
         self.decoder.reset(bs)
         query_encoder_raw_outputs, query_encoder_outputs = [], []
+        raw_outputs, outputs = [], []
         for context in encoder_inputs:
             self.query_encoder.reset(bs)
-            raw_outpus, outputs = self.query_encoder(context)
-            query_encoder_raw_outputs.append(raw_outpus)
+            raw_outputs, outputs = self.query_encoder(context)
+            query_encoder_raw_outputs.append(raw_outputs)
             query_encoder_outputs.append(outputs[-1])
         query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)
         raw_outputs_session, session_outputs = self.session_encoder(query_encoder_outputs)
@@ -98,4 +98,4 @@ class HRED(nn.Module):
         else:
             # use argmax or beam search predictions
             predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
-        return predictions, [*raw_outpus, *raw_outputs_dec], [*outputs, *outputs_dec]
+        return predictions, [*raw_outputs, *raw_outputs_dec], [*outputs, *outputs_dec]

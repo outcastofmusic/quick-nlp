@@ -1,7 +1,7 @@
 import torch
+from fastai.rnn_reg import LockedDropout
 from torch import nn as nn
 
-from fastai.rnn_reg import LockedDropout
 from quicknlp.utils import assert_dims
 from .attention import MLPAttention, SDPAttention
 
@@ -14,7 +14,8 @@ class Projection(nn.Module):
         self.linear = nn.Linear(n_in, n_out, bias=False)
         self.linear.weight.data.uniform_(-self.initrange, self.initrange)
         self.dropout = LockedDropout(dropout)
-        if tie_encoder: self.linear.weight = tie_encoder.weight
+        if tie_encoder:
+            self.linear.weight = tie_encoder.weight
 
     def forward(self, input):
         # input should be sl, bs, input_dim
