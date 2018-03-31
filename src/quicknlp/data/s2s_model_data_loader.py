@@ -9,14 +9,14 @@ from torch import optim
 from torchtext.data import Dataset, Field
 
 from quicknlp.data.data_loaders import S2SDataLoader
-from quicknlp.modules import Seq2Seq
-from quicknlp.modules.seq2seq import s2sloss
-from quicknlp.modules.seq2seq_attention import Seq2SeqAttention
+from quicknlp.models import Seq2Seq
+from quicknlp.models.seq2seq import s2sloss
+from quicknlp.models.seq2seq_attention import Seq2SeqAttention
 from .datasets import NamedField, TabularDatasetFromDataFrame, TabularDatasetFromFiles
 from .model_helpers import PrintingMixin, check_columns_in_df, predict_with_seq2seq
 
 
-class S2SLearner(Learner):
+class EncoderDecoderLearner(Learner):
 
     def s2sloss(self, input, target, **kwargs):
         return s2sloss(input=input, target=target, pad_idx=self.data.pad_idx, **kwargs)
@@ -42,8 +42,6 @@ class S2SLearner(Learner):
         raise NotImplementedError
 
     def summary(self):
-        # input_size = [[self.data.sz], [self.data.sz]]
-        # return model_summary(self.model, input_size, "int")
         print(self.model)
 
     def predict(self, is_test=False):
@@ -185,7 +183,7 @@ class S2SModelData(ModelData, PrintingMixin):
 
     def to_model(self, m, opt_fn):
         model = SingleModel(to_gpu(m))
-        return S2SLearner(self, model, opt_fn=opt_fn)
+        return EncoderDecoderLearner(self, model, opt_fn=opt_fn)
 
     def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, attention=True, att_nhid=512,
                   **kwargs):

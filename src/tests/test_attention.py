@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from fastai.core import V, T, to_gpu
 
-from quicknlp.modules.submodules.attention import MLPAttention, SDPAttention
+from quicknlp.modules.attention import MLPAttention, SDPAttention
 
 params = [(300, 300), (300, 600)]
 

@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import List, Tuple, Optional, Union, Sequence
+from typing import List, Tuple, Optional, Union, Sequence, Any
 
 import numpy as np
 import torch
@@ -80,6 +80,8 @@ def model_summary(m, input_size, dtype=float):
 
 def print_batch(lr, dt, input_field, output_field, batch_num=0, num_sentences=-1, is_test=False, num_beams=1):
     predictions, targets, inputs = lr.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
+    import pdb
+    pdb.set_trace()
     inputs = dt.itos(inputs[batch_num], input_field)[0]
     predictions = dt.itos(predictions[batch_num], output_field)[0]
     targets = dt.itos(targets[batch_num], output_field)[0]
@@ -97,8 +99,12 @@ def get_trainable_parameters(model: nn.Module, grad=False) -> List[str]:
         return [name for name, param in model.named_parameters() if param.requires_grad is True]
 
 
-def get_list(value):
-    return [value] if not isinstance(value, list) else value
+def get_list(value: Union[List[Any], Any], multiplier: int = 1) -> List[Any]:
+    if isinstance(value, list):
+        assert len(value) == multiplier, f"{value} is not the correct size {multiplier}"
+    else:
+        value = [value] * multiplier
+    return value
 
 
 Array = Union[np.ndarray, torch.Tensor, int, float]
@@ -131,3 +137,12 @@ def assert_dims(value: Sequence[Array], dims: List[Optional[int]]) -> Sequence[A
                 else:
                     assert actual_dim == expected_dim, f'{shape} does not match {dims}'
     return value
+
+
+def get_kwarg(kwargs, name, default_value=None, remove=True):
+    """Returns the value for the parameter if it exists in the kwargs otherwise the default value provided"""
+    if remove:
+        value = kwargs.pop(name) if name in kwargs else default_value
+    else:
+        value = kwargs.get(name, default_value)
+    return value, kwargs

@@ -1,12 +1,17 @@
+from functools import partial
 from typing import List, Optional, Callable
 
 import pandas as pd
+from fastai.core import to_gpu
 from fastai.dataset import ModelData
+from torch import optim
 from torchtext.data import Dataset, Field
 
+from quicknlp.data.s2s_model_data_loader import EncoderDecoderLearner
+from quicknlp.models import HRED
 from .data_loaders import HierarchicalDataLoader
 from .datasets import HierarchicalDatasetFromDataFrame, HierarchicalDatasetFromFiles
-from .model_helpers import PrintingMixin
+from .model_helpers import PrintingMixin, HREDModel
 
 
 class HierarchicalModelData(ModelData, PrintingMixin):
@@ -159,7 +164,20 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                    trn_ds=trn_ds, val_ds=val_ds, test_ds=test_ds, bs=bs, sort_key=sort_key, **kwargs)
 
     def to_model(self, m, opt_fn):
-        raise NotImplementedError
+        model = HREDModel(to_gpu(m))
+        return EncoderDecoderLearner(self, model, opt_fn=opt_fn)
 
-    def get_model(self, opt_fn, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, **kwargs):
-        raise NotImplementedError
+    def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, **kwargs):
+        if opt_fn is None:
+            opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+        m = HRED(
+            ntoken=self.nt,
+            emb_sz=emb_sz,
+            nhid=nhid,
+            nlayers=nlayers,
+            pad_token=self.pad_idx,
+            eos_token=self.eos_idx,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        return self.to_model(m, opt_fn)

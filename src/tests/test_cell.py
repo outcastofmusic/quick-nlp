@@ -2,7 +2,7 @@ import pytest
 import torch as tr
 from fastai.core import V, Variable, to_gpu
 
-from quicknlp.modules.submodules.cell import Cell
+from quicknlp.modules.cell import Cell
 
 
 @pytest.mark.parametrize('cell_type, hidden_type',

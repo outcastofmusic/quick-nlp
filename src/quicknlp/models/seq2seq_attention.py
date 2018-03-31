@@ -1,6 +1,6 @@
 from quicknlp.utils import assert_dims
 from .seq2seq import Seq2Seq, HParam, get_list
-from .submodules import RNNAttentionDecoder, EmbeddingRNNEncoder, AttentionProjection
+from quicknlp.modules import RNNAttentionDecoder, EmbeddingRNNEncoder, AttentionProjection
 
 
 class Seq2SeqAttention(Seq2Seq):
@@ -26,7 +26,7 @@ class Seq2SeqAttention(Seq2Seq):
         """
         super(Seq2Seq, self).__init__()
         # allow for the same or different parameters between encoder and decoder
-        ntoken, emb_sz, nhid, nlayers = get_list(ntoken), get_list(emb_sz), get_list(nhid), get_list(nlayers)
+        ntoken, emb_sz, nhid, nlayers = get_list(ntoken,2), get_list(emb_sz,2), get_list(nhid,2), get_list(nlayers,2)
         if "dropoutd" in kwargs:
             dropoutd = kwargs.pop("dropoutd")
         else:

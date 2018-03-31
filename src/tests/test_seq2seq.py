@@ -2,9 +2,9 @@ import pytest
 from torch.optim import Adam
 
 from fastai.core import V, to_gpu
-from quicknlp.modules import Seq2Seq
-from quicknlp.modules.seq2seq import s2sloss
-from quicknlp.modules.seq2seq_attention import Seq2SeqAttention
+from quicknlp.models import Seq2Seq
+from quicknlp.models.seq2seq import s2sloss
+from quicknlp.models.seq2seq_attention import Seq2SeqAttention
 from quicknlp.utils import get_trainable_parameters
 
 params = [(True), (False)]

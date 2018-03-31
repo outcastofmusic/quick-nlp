@@ -1,11 +1,10 @@
 from typing import List, Union
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quicknlp.utils import get_list, assert_dims
-from .submodules import EmbeddingRNNEncoder, RNNEncoder, EmbeddingRNNDecoder, Projection
+from quicknlp.modules import EmbeddingRNNDecoder, EmbeddingRNNEncoder, Projection
+from quicknlp.utils import get_list, concat_bidir_state, assert_dims
 
 HParam = Union[List[int], int]
 
@@ -22,8 +21,8 @@ def s2sloss(input, target, pad_idx, *args, **kwargs):
                            *args, **kwargs)
 
 
-class HRED(nn.Module):
-    """Basic HRED model"""
+class Seq2Seq(nn.Module):
+    """Basic Seq2Seq model"""
 
     def __init__(self, ntoken: HParam, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
@@ -43,54 +42,38 @@ class HRED(nn.Module):
             bidir (bool): if True use a bidirectional encoder
             **kwargs: Extra embeddings that will be passed to the encoder and the decoder
         """
-        super().__init__()
+        super(Seq2Seq, self).__init__()
         # allow for the same or different parameters between encoder and decoder
-        ntoken, emb_sz, nhid, nlayers = get_list(ntoken), get_list(emb_sz), get_list(nhid), get_list(nlayers)
-        dropoutd = kwargs.pop("dropoutd") if "dropoutd" in kwargs else 0.5
-        self.cell_type = "gru"
-        self.query_encoder = EmbeddingRNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
-                                                 pad_token=pad_token, bidir=bidir, out_dim=nhid[0],
-                                                 cell_type=self.cell_type, **kwargs)
-
-        self.session_encoder = RNNEncoder(in_dim=nhid[0], nhid=nhid[1], out_dim=nhid[-1], nlayers=1, bidir=False,
-                                          cell_type=self.cell_type, **kwargs)
+        ntoken, emb_sz, nhid, nlayers = get_list(ntoken, 2), get_list(emb_sz, 2), get_list(nhid, 2), get_list(nlayers,
+                                                                                                              2)
+        if "dropoutd" in kwargs:
+            dropoutd = kwargs.pop("dropoutd")
+        else:
+            dropoutd = 0.5
+        self.encoder = EmbeddingRNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
+                                           pad_token=pad_token, bidir=bidir, **kwargs)
 
         self.decoder = EmbeddingRNNDecoder(ntoken=ntoken[-1], emb_sz=emb_sz[-1], nhid=nhid[-1], nlayers=nlayers[-1],
                                            pad_token=pad_token, eos_token=eos_token, max_tokens=max_tokens,
                                            # Share the embedding layer between encoder and decoder
-                                           embedding_layer=self.query_encoder.encoder_with_dropout.embed if share_embedding_layer else None,
+                                           embedding_layer=self.encoder.encoder_with_dropout.embed if share_embedding_layer else None,
                                            # potentially tie the output projection with the decoder embedding
-                                           cell_type=self.cell_type,
                                            **kwargs
                                            )
         enc = self.decoder.encoder if tie_decoder else None
         self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=emb_sz[-1], dropout=dropoutd,
                                                    tie_encoder=enc if tie_decoder else None
                                                    )
-        self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=nhid[-1])
         self.nt = ntoken[-1]
-
-    def create_decoder_state(self, session_outputs):
-        output = self.decoder_state_linear(session_outputs[-1])
-        return output.unsqueeze_(0).contiguous()
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
-        bs = encoder_inputs.size(2)
-        self.session_encoder.reset(bs)
+        bs = encoder_inputs.size(1)
+        self.encoder.reset(bs)
         self.decoder.reset(bs)
-        query_encoder_raw_outputs, query_encoder_outputs = [], []
-        raw_outputs, outputs = [], []
-        for context in encoder_inputs:
-            self.query_encoder.reset(bs)
-            raw_outputs, outputs = self.query_encoder(context)
-            query_encoder_raw_outputs.append(raw_outputs)
-            query_encoder_outputs.append(outputs[-1])
-        query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)
-        raw_outputs_session, session_outputs = self.session_encoder(query_encoder_outputs)
-        state = self.decoder.hidden
-        state[0] = self.create_decoder_state(session_outputs[-1])
+        raw_outpus, outputs = self.encoder(encoder_inputs)
+        state = concat_bidir_state(self.encoder.hidden)
         raw_outputs_dec, outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
         if num_beams == 0:
             # use output of the projection module
@@ -98,4 +81,4 @@ class HRED(nn.Module):
         else:
             # use argmax or beam search predictions
             predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
-        return predictions, [*raw_outputs, *raw_outputs_dec], [*outputs, *outputs_dec]
+        return predictions, [*raw_outpus, *raw_outputs_dec], [*outputs, *outputs_dec]

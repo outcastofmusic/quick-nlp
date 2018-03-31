@@ -1,54 +1,35 @@
-from torch.optim import Adam
+from fastai.imports import *
+from fastai.plots import *
 from torchtext.data import Field
+from fastai.lm_rnn import seq2seq_reg
+from quicknlp import print_batch, HierarchicalModelData
+from pathlib import Path
 
-from fastai.core import SGD_Momentum, to_gpu
-from fastai.model import fit
-from quicknlp import SpacyTokenizer, S2SModelData
-from quicknlp.modules import Seq2Seq
+path = Path.home() / "PycharmProjects/personal/quick-nlp/tutorials/dataset/dialogue"
 
-INIT_TOKEN = "<sos>"
-EOS_TOKEN = "<eos>"
-DATAPATH = "/home/agis/PycharmProjects/pytorch-seq2seq/dataset"
-fields = [
-    ("english", Field(init_token=INIT_TOKEN, eos_token=EOS_TOKEN, tokenize=SpacyTokenizer('en'), lower=True)),
-    ("french", Field(init_token=INIT_TOKEN, eos_token=EOS_TOKEN, tokenize=SpacyTokenizer('fr'), lower=True))
+ubuntu_data = pd.read_csv(path / "train/dialogueText.csv")
 
-]
-batch_size = 64
-data = S2SModelData.from_text_files(path=DATAPATH, fields=fields,
-                                    train="train",
-                                    validation="validation",
-                                    source_names=["english", "french"],
-                                    target_names=["french"],
-                                    bs=batch_size
-                                    )
-print(f'num tr batches: {len(data.trn_dl)}, num tr samples: {len(data.trn_ds)}')
-print(f'num val batches: {len(data.val_dl)},num val samples: {len(data.val_ds)}')
+field = Field(tokenize="spacy", lower="True")
+cols = {"text_col": "text", "batch_col": "dialogueID", "sort_col": "date", "role_col": "from"}
+ubuntu_data['dialogueID'].nunique()
+sampled_dialogues = set(ubuntu_data['dialogueID'].sample(1000).tolist())
+train_df = ubuntu_data.loc[ubuntu_data['dialogueID'].apply(lambda x: x in sampled_dialogues)]
+# train_df = ubuntu_data
 
-emb_size = 300
-nh = 1024
-nl = 3
-learner = data.get_model(opt_fn=SGD_Momentum(0.7), emb_sz=emb_size,
-                         nhid=nh,
-                         nlayers=nl,
-                         max_tokens=20,
-                         projection=""
-                         )
-# reg_fn = partial(seq2seq_reg, alpha=2, beta=1)
+model_data = HierarchicalModelData.from_dataframes(path=path,
+                                                   train_df=train_df,
+                                                   val_df=train_df,
+                                                   text_field=field,
+                                                   **cols
+                                                   )
+
+learner = model_data.get_model()
+
+reg_fn = partial(seq2seq_reg, alpha=2, beta=1)
 clip = 0.3
-# learner.reg_fn = reg_fn
-# learner.clip = clip
-print("untrained model")
-# print_batch(lr=learner, dt=data, input_field="english", output_field="french", num_sentences=4)
+learner.reg_fn = reg_fn
+learner.clip = clip
 
-# learner.fit(7, 100, wds=1e-6, cycle_len=4)
-# learner.save("overfitting_seq2seq")
-# learner.load("overfitting_seq2seq")
+learner.fit(lrs=0.01, n_cycle=2, cycle_len=2)
 
-print("trained model")
-# print_batch(lr=learner, dt=data, input_field="english", output_field="french", num_sentences=4)
-ntoken = [data.nt[name] for name in data.trn_dl.source_names]
-model = Seq2Seq(ntoken=ntoken, nhid=nh, nlayers=1, emb_sz=emb_size, pad_token=data.pad_idx,
-                eos_token=data.eos_idx)
-model = to_gpu(model)
-fit(model=model, data=data, epochs=1, opt=Adam(params=model.parameters()), crit=learner.s2sloss)
+print_batch(lr=learner, dt=model_data, input_field="text", output_field="text", num_sentences=4)
