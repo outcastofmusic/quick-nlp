@@ -4,24 +4,36 @@ from torch import nn as nn
 
 from quicknlp.utils import assert_dims
 from .attention import MLPAttention, SDPAttention
+import torch.nn.functional as F
 
 
 class Projection(nn.Module):
     initrange = 0.1
 
-    def __init__(self, n_out: int, n_in: int, dropout: float, tie_encoder=None):
+    def __init__(self, n_out: int, n_in: int, dropout: float, nhid: int = None, tie_encoder=None):
         super().__init__()
-        self.linear = nn.Linear(n_in, n_out, bias=False)
-        self.linear.weight.data.uniform_(-self.initrange, self.initrange)
+        layers = []
         self.dropout = LockedDropout(dropout)
+        if nhid is not None:
+            linear1 = nn.Linear(n_in, nhid)
+            linear1.weight.data.uniform_(-self.initrange, self.initrange)
+            layers.append(linear1)
+            dropout1 = nn.Dropout(dropout)
+            layers.append(dropout1)
+        else:
+            nhid = n_in
+        linear2 = nn.Linear(nhid, n_out, bias=False)
         if tie_encoder:
-            self.linear.weight = tie_encoder.weight
+            linear2.weight = tie_encoder.weight
+        layers.append(linear2)
+        self.layers = nn.Sequential(*layers)
 
     def forward(self, input):
         # input should be sl, bs, input_dim
+
         output = self.dropout(input)
-        decoded = self.linear(output.view(output.size(0) * output.size(1), output.size(2)))
-        # output should be sl, bs, proj_dim
+        decoded = output.view(output.size(0) * output.size(1), output.size(2))
+        decoded = self.layers(decoded)
         return decoded.view(-1, input.size(1), decoded.size(1))
 
 

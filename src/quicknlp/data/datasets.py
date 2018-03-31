@@ -1,7 +1,7 @@
 import io
 import os
 from glob import glob
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, Iterator
 
 import pandas as pd
 from torchtext.data import Dataset, Example, Field
@@ -79,10 +79,9 @@ class TabularDatasetFromDataFrame(Dataset):
 
 
 def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]], batch_col: str,
-                            role_col: str, text_col: str, sort_col: str) -> List[Example]:
+                            role_col: str, text_col: str, sort_col: str) -> Iterator[Example]:
     """convert df to dialogue examples"""
     df = [df] if not isinstance(df, list) else df
-    examples = []
     for file_index, _df in enumerate(df):
         for chat_id, conversation in tqdm(_df.groupby(batch_col), desc=f"processed file {file_index}/{len(df)}"):
             if conversation[role_col].nunique() > 1:
@@ -94,16 +93,14 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
                 roles = "".join(conversation_tokens.str.cat(sep=" "))
                 example = Example.fromlist([text, roles], fields)
                 example.sl = text_with_roles_length.tolist()
-                examples.append(example)
-    assert len(examples) > 0, "examples are empty"
-    return examples
+                yield example
 
 
 class HierarchicalDatasetFromDataFrame(Dataset):
 
-    def __init__(self, path: str, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str,
+    def __init__(self, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str,
                  text_col: str,
-                 role_col: str, sort_col: str, **kwargs):
+                 role_col: str, sort_col: str, path: Optional[str] = None, **kwargs):
         """
 
         Args:
@@ -116,16 +113,20 @@ class HierarchicalDatasetFromDataFrame(Dataset):
             **kwargs:
         """
         fields = [("text", text_field), ("roles", text_field)]
-        path = Path(path)
-        examples_pickle = path / "examples.pickle"
-        if examples_pickle.exists():
-            with examples_pickle.open("rb") as fh:
-                examples = pickle.load(fh)
+        iterator = df_to_dialogue_examples(df, fields=fields, batch_col=batch_col, role_col=role_col,
+                                           sort_col=sort_col, text_col=text_col)
+        if path is not None:
+            path = Path(path)
+            examples_pickle = path / "examples.pickle"
+            if examples_pickle.exists():
+                with examples_pickle.open("rb") as fh:
+                    examples = pickle.load(fh)
+            else:
+                with examples_pickle.open('wb') as fh:
+                    examples = [i for i in iterator]
+                    pickle.dump(examples, fh)
         else:
-            examples = df_to_dialogue_examples(df, fields=fields, batch_col=batch_col, role_col=role_col,
-                                               sort_col=sort_col, text_col=text_col)
-            with examples_pickle.open('wb') as fh:
-                pickle.dump(examples, fh)
+            examples = [i for i in iterator]
         super().__init__(examples=examples, fields=fields, **kwargs)
 
     @classmethod

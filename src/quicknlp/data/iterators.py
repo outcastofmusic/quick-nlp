@@ -1,5 +1,5 @@
 from doctest import Example
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Iterator
 
 import numpy as np
 from torch import LongTensor
@@ -14,8 +14,8 @@ LT = LongTensor
 
 
 class HierarchicalIterator(BucketIterator):
-    def __init__(self, dataset, batch_size, sort_key, target_roles="all", **kwargs):
-        self.target_roles = None if target_roles == "all" else target_roles
+    def __init__(self, dataset, batch_size, sort_key, target_roles=None, **kwargs):
+        self.target_roles = target_roles
         self.text_field = dataset.fields['text']
         super(HierarchicalIterator, self).__init__(dataset=dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
 
@@ -48,7 +48,7 @@ class HierarchicalIterator(BucketIterator):
         assert_dims(targets, [max_conv, max_sl, batch_size])
         return source, targets[1:], targets[1:, 1:]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Batch]:
         """Same iterator almost as bucket iterator"""
         while True:
             self.init_epoch()
@@ -66,6 +66,7 @@ class HierarchicalIterator(BucketIterator):
 
                 context, response, targets = self.process_minibatch(minibatch)
                 for index in range(context.shape[0]):
+                    # do not yield if the target is just padding (does not provide anything to training)
                     if (targets[index] != self.text_field.vocab.stoi[self.text_field.pad_token]).any():
                         yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
                                              train=self.train,

@@ -5,7 +5,7 @@ def test_hierarchical_data_loader(hierarchical_dataset):
     # When I crate a Hierarchical Model loader
     ds, field = hierarchical_dataset
     field.build_vocab(ds)
-    dl = HierarchicalDataLoader(ds, batch_size=2, target_names=["role2"])
+    dl = HierarchicalDataLoader(ds, batch_size=2, target_names=["__role2__"])
 
     # Then I expect every batch to have a context and a response and targets
     for batch in dl:

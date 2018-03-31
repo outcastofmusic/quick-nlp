@@ -3,6 +3,7 @@ from typing import List, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from fastai.lm_rnn import repackage_var
 
 from quicknlp.utils import get_list, assert_dims, get_kwarg
 from quicknlp.modules import EmbeddingRNNEncoder, RNNEncoder, EmbeddingRNNDecoder, Projection
@@ -61,10 +62,11 @@ class HRED(nn.Module):
                                            embedding_layer=self.query_encoder.encoder_with_dropout.embed if share_embedding_layer else None,
                                            # potentially tie the output projection with the decoder embedding
                                            cell_type=self.cell_type,
+                                           out_dim=nhid[-1],
                                            **kwargs
                                            )
         enc = self.decoder.encoder if tie_decoder else None
-        self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=emb_sz[-1], dropout=dropoutd,
+        self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=nhid[-1],nhid=emb_sz[-1], dropout=dropoutd,
                                                    tie_encoder=enc if tie_decoder else None
                                                    )
         self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=self.decoder.rnns[0].output_size)
@@ -82,11 +84,15 @@ class HRED(nn.Module):
         self.decoder.reset(bs)
         query_encoder_raw_outputs, query_encoder_outputs = [], []
         raw_outputs, outputs = [], []
-        for context in encoder_inputs:
+        num_utterances = encoder_inputs.shape[0]
+        for index, context in enumerate(encoder_inputs):
             self.query_encoder.reset(bs)
             raw_outputs, outputs = self.query_encoder(context)
             query_encoder_raw_outputs.append(raw_outputs)
-            query_encoder_outputs.append(outputs[-1])
+            # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
+            # the gradient backpropagation and fit it into memory
+            out = repackage_var(outputs[-1]) if num_utterances > 20 and index <= num_utterances // 2 else outputs[-1]
+            query_encoder_outputs.append(out)
         query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)
         raw_outputs_session, session_outputs = self.session_encoder(query_encoder_outputs)
         state = self.decoder.hidden

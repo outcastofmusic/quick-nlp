@@ -43,16 +43,17 @@ class S2SDataLoader:
 class HierarchicalDataLoader:
     """Loads Hierarchical data into batches, including source and target"""
 
-    def __init__(self, dataset: Dataset, batch_size: int, target_names: List[str],
+    def __init__(self, dataset: Dataset, batch_size: int, target_names: Optional[List[str]] = None,
                  sort_key: Optional[Callable] = None, **kwargs):
         self.dataset = dataset
-        self.target_names = target_names if isinstance(target_names, list) else [target_names]
+        target_names = [target_names] if isinstance(target_names, str) else target_names
         # sort by the first field if no sort key is given
         if sort_key is None:
             # The default sorting is done by conversation length
             def sort_key(x):
                 return x.roles
-        self.dl = HierarchicalIterator(dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
+        self.dl = HierarchicalIterator(dataset, batch_size=batch_size, sort_key=sort_key, target_roles=target_names,
+                                       **kwargs)
         self.bs = batch_size
         self.iter = 0
 

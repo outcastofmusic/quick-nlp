@@ -77,7 +77,7 @@ class EncoderDecoderModel(BasicModel):
             groups.append((layer.encoder, layer.dropouti))
         groups.append(tuple([i for i in chain(*zip(layer.rnns, layer.dropouths))]))
         if hasattr(layer, "projection_layer") and add_projection:
-            groups.append((layer.projection_layer.linear, layer.projection_layer.dropout))
+            groups.append((layer.projection_layer.dropout, layer.projection_layer.layers))
         return groups
 
 
