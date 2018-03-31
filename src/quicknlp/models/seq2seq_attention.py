@@ -26,7 +26,8 @@ class Seq2SeqAttention(Seq2Seq):
         """
         super(Seq2Seq, self).__init__()
         # allow for the same or different parameters between encoder and decoder
-        ntoken, emb_sz, nhid, nlayers = get_list(ntoken,2), get_list(emb_sz,2), get_list(nhid,2), get_list(nlayers,2)
+        ntoken, emb_sz, nhid, nlayers = get_list(ntoken, 2), get_list(emb_sz, 2), \
+                                        get_list(nhid, 2), get_list(nlayers, 2)
         if "dropoutd" in kwargs:
             dropoutd = kwargs.pop("dropoutd")
         else:
