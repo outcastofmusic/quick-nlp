@@ -6,11 +6,11 @@ from fastai.core import SingleModel, to_gpu
 from fastai.dataset import ModelData
 from fastai.learner import Learner, load_model, save_model
 from torch import optim
+from torch.nn import functional as F
 from torchtext.data import Dataset, Field
 
 from quicknlp.data.data_loaders import S2SDataLoader
 from quicknlp.models import Seq2Seq
-from quicknlp.models.seq2seq import s2sloss
 from quicknlp.models.seq2seq_attention import Seq2SeqAttention
 from .datasets import NamedField, TabularDatasetFromDataFrame, TabularDatasetFromFiles
 from .model_helpers import PrintingMixin, check_columns_in_df, predict_with_seq2seq
@@ -117,6 +117,8 @@ class S2SModelData(ModelData, PrintingMixin):
             path (str): the absolute path in which temporary model data will be saved
             fields (List[NamedField]): A list of Tuple[Name,Field] for every field to be used in the data
                 if multiple fields should use the same vocab, the same field should be passed to them
+            source_names (List[str]): A list of field names to be used from the fields for the encoder inputs
+            target_names (List[str]): A list of field names to be used from the fields for the decoder inputs
             train_df (pd.DataFrame):  a pandas DataFrame with the training Data
             val_df (str): a pandas DataFrame with the validation Data
             test_df (Optional[str]):a pandas DataFrame with the test Data
@@ -157,6 +159,8 @@ class S2SModelData(ModelData, PrintingMixin):
             path (str): the absolute path in which temporary model data will be saved
             fields (List[NamedField]): A list of Tuple[Name,Field] for every field to be used in the data
                 if multiple fields should use the same vocab, the same field should be passed to them
+            source_names (List[str]): A list of field names to be used from the fields for the encoder inputs
+            target_names (List[str]): A list of field names to bused from the fields for the decoder inputs
             train (str):  The path to the training data
             validation (str):  The path to the test data
             test (Optional[str]): The path to the test data
@@ -213,3 +217,15 @@ class S2SModelData(ModelData, PrintingMixin):
                 **kwargs
             )
         return self.to_model(m, opt_fn)
+
+
+def s2sloss(input, target, pad_idx, *args, **kwargs):
+    vocab = input.size(-1)
+    # dims are sq-1 times bs times vocab
+    input = input[:target.size(0)].view(-1, vocab).contiguous()
+    # targets are sq-1 times bs (one label for every word)
+    target = target.view(-1).contiguous()
+    return F.cross_entropy(input=input,
+                           target=target,
+                           ignore_index=pad_idx,
+                           *args, **kwargs)

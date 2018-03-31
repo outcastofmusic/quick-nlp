@@ -63,11 +63,10 @@ def test_S2SModelData_from_file(generalmodel):
     assert_dims(batch, [4, None, 2])
 
     sentences = to_np(batch[0])
-    actual_sentences = generalmodel.itos(sentences, "english")
-    for batch_sentences in actual_sentences:
-        for beam_sentence in batch_sentences:
-            for sentence in beam_sentence:
-                assert sentence in {"goodbye", "hello", "i like to read", "i am hungry"}
+    batch_sentences = generalmodel.itos(sentences, "english")
+    for beam_sentence in batch_sentences:
+        for sentence in beam_sentence:
+            assert sentence in {"goodbye", "hello", "i like to read", "i am hungry"}
 
 
 def test_S2SModelData_learner(s2smodel):
@@ -84,16 +83,9 @@ def test_S2SModelData_learner(s2smodel):
     assert len(predict_results) == 2
     assert predict_results[0].shape[0] <= max_tokens + 1
     assert predict_results[0].shape[1] == bs
-    text_results = s2smodel.itos(predict_results, "german")
-    # text_results should be a list of batches where every batch is a list of beams for every sample
-    assert len(text_results) == len(predict_results)
-    assert len(text_results[0]) == predict_results[0].shape[1]
-    assert len(text_results[0][0]) == predict_results[0].shape[2]
-    # sos token at the beginning is removed so the number of tokens should be equal or less to shape[0] -1
-    # less being that given the randomness of the unpredicted models sometimes the  eos token will appear
-    # and wipe out the whole prediction text
-    assert len(text_results[0][0][-1].split()) <= predict_results[0].shape[0] - 1, "text_results: {}".format(
-        text_results)
+    for result_batch in predict_results:
+        text_results = s2smodel.itos(result_batch, "german")
+        assert len(text_results) == result_batch.shape[1]
 
 
 def test_S2SModelData_learner_summary(s2smodel):

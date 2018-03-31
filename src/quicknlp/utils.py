@@ -7,6 +7,8 @@ import torch.nn as nn
 from fastai.core import to_gpu
 from torch.autograd import Variable
 
+from quicknlp.data.model_helpers import BatchBeamTokens
+
 States = List[Tuple[torch.Tensor, torch.Tensor]]
 
 
@@ -78,16 +80,36 @@ def model_summary(m, input_size, dtype=float):
     return summary
 
 
-def print_batch(lr, dt, input_field, output_field, batch_num=0, num_sentences=-1, is_test=False, num_beams=1):
+def print_batch(lr, dt, input_field, output_field, num_batches=1, num_sentences=-1, is_test=False, num_beams=1):
     predictions, targets, inputs = lr.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
-    import pdb
-    pdb.set_trace()
-    inputs = dt.itos(inputs[batch_num], input_field)[0]
-    predictions = dt.itos(predictions[batch_num], output_field)[0]
-    targets = dt.itos(targets[batch_num], output_field)[0]
-    for index, (inp, pred, targ) in enumerate(zip(inputs, predictions, targets)):
-        print(f'batch: {batch_num} sample : {index}\ninput: {inp[0]}\ntarget: {targ[0]}\nprediction: {pred}\n\n')
-        if 0 < num_sentences <= index - 1:
+    for batch_num, (input, target, prediction) in enumerate(zip(inputs, targets, predictions)):
+        inputs_str: BatchBeamTokens = dt.itos(input, input_field)
+        predictions_str: BatchBeamTokens = dt.itos(prediction, output_field)
+        targets_str: BatchBeamTokens = dt.itos(target, output_field)
+        for index, (inp, targ, pred) in enumerate(zip(inputs_str, targets_str, predictions_str)):
+            print(
+                f'batch: {batch_num} sample : {index}\ninput: {" ".join(inp)}\ntarget: { " ".join(targ)}\nprediction: {" ".join(pred)}\n\n')
+            if 0 < num_sentences <= index - 1:
+                break
+        if 0 < num_batches <= batch_num - 1:
+            break
+
+
+def print_dialogue_batch(lr, dt, input_field, output_field, num_batches=1, num_sentences=-1, is_test=False,
+                         num_beams=1):
+    predictions, targets, inputs = lr.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
+    for batch_num, (input, target, prediction) in enumerate(zip(inputs, targets, predictions)):
+        input = np.transpose(input, [1, 2, 0])  # transpose number of utterances to beams [sl, bs, nb]
+        inputs_str: BatchBeamTokens = dt.itos(input, input_field)
+        inputs_str: List[str] = ["\n".join(conv) for conv in inputs_str]
+        predictions_str: BatchBeamTokens = dt.itos(prediction, output_field)
+        targets_str: BatchBeamTokens = dt.itos(target, output_field)
+        for index, (inp, targ, pred) in enumerate(zip(inputs_str, targets_str, predictions_str)):
+            print(
+                f'batch: {batch_num} sample : {index}\ninput: {" ".join(inp)}\ntarget: { " ".join(targ)}\nprediction: {" ".join(pred)}\n\n')
+            if 0 < num_sentences <= index - 1:
+                break
+        if 0 < num_batches <= batch_num - 1:
             break
 
 

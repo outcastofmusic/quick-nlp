@@ -4,7 +4,7 @@ from torch.optim import Adam
 
 from quicknlp.data.model_helpers import EncoderDecoderModel, HREDModel
 from quicknlp.models import HRED
-from quicknlp.models.seq2seq import s2sloss
+from quicknlp.data.s2s_model_data_loader import s2sloss
 from quicknlp.utils import get_trainable_parameters
 
 params = [(True), (False)]

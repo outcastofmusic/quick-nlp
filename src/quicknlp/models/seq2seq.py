@@ -1,24 +1,11 @@
 from typing import List, Union
 
 import torch.nn as nn
-import torch.nn.functional as F
 
 from quicknlp.modules import EmbeddingRNNDecoder, EmbeddingRNNEncoder, Projection
 from quicknlp.utils import get_list, concat_bidir_state, assert_dims
 
 HParam = Union[List[int], int]
-
-
-def s2sloss(input, target, pad_idx, *args, **kwargs):
-    vocab = input.size(-1)
-    # dims are sq-1 times bs times vocab
-    input = input[:target.size(0)].view(-1, vocab).contiguous()
-    # targets are sq-1 times bs (one label for every word)
-    target = target.view(-1).contiguous()
-    return F.cross_entropy(input=input,
-                           target=target,
-                           ignore_index=pad_idx,
-                           *args, **kwargs)
 
 
 class Seq2Seq(nn.Module):
