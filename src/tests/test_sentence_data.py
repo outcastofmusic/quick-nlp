@@ -89,9 +89,10 @@ def test_S2SModelData_learner(s2smodel):
     assert len(text_results) == len(predict_results)
     assert len(text_results[0]) == predict_results[0].shape[1]
     assert len(text_results[0][0]) == predict_results[0].shape[2]
-    # sos token at the beginning is removed so the number of tokens should be equal to shape[0] -1
-    # TODO fix test
-    assert len(text_results[0][0][-1].split()) == predict_results[0].shape[0] - 1, "text_results: {}".format(
+    # sos token at the beginning is removed so the number of tokens should be equal or less to shape[0] -1
+    # less being that given the randomness of the unpredicted models sometimes the  eos token will appear
+    # and wipe out the whole prediction text
+    assert len(text_results[0][0][-1].split()) <= predict_results[0].shape[0] - 1, "text_results: {}".format(
         text_results)
 
 
