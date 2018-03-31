@@ -5,6 +5,8 @@ from typing import List, Tuple, Optional, Union
 
 import pandas as pd
 from torchtext.data import Dataset, Example, Field
+from pathlib import Path
+import pickle
 from tqdm import tqdm
 
 NamedField = Tuple[str, Field]
@@ -81,8 +83,8 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
     """convert df to dialogue examples"""
     df = [df] if not isinstance(df, list) else df
     examples = []
-    for _df in df:
-        for chat_id, conversation in tqdm(_df.groupby(batch_col)):
+    for file_index, _df in enumerate(df):
+        for chat_id, conversation in tqdm(_df.groupby(batch_col), desc=f"processed file {file_index}/{len(df)}"):
             if conversation[role_col].nunique() > 1:
                 conversation = conversation.sort_values(by=sort_col)
                 conversation_tokens = "__" + conversation[role_col] + "__"
@@ -93,12 +95,14 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
                 example = Example.fromlist([text, roles], fields)
                 example.sl = text_with_roles_length.tolist()
                 examples.append(example)
+    assert len(examples) > 0, "examples are empty"
     return examples
 
 
 class HierarchicalDatasetFromDataFrame(Dataset):
 
-    def __init__(self, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str, text_col: str,
+    def __init__(self, path: str, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str,
+                 text_col: str,
                  role_col: str, sort_col: str, **kwargs):
         """
 
@@ -112,17 +116,25 @@ class HierarchicalDatasetFromDataFrame(Dataset):
             **kwargs:
         """
         fields = [("text", text_field), ("roles", text_field)]
-        examples = df_to_dialogue_examples(df, fields=fields, batch_col=batch_col, role_col=role_col,
-                                           sort_col=sort_col, text_col=text_col)
+        path = Path(path)
+        examples_pickle = path / "examples.pickle"
+        if examples_pickle.exists():
+            with examples_pickle.open("rb") as fh:
+                examples = pickle.load(fh)
+        else:
+            examples = df_to_dialogue_examples(df, fields=fields, batch_col=batch_col, role_col=role_col,
+                                               sort_col=sort_col, text_col=text_col)
+            with examples_pickle.open('wb') as fh:
+                pickle.dump(examples, fh)
         super().__init__(examples=examples, fields=fields, **kwargs)
 
     @classmethod
     def splits(cls, path: Optional[str] = None, train_df: Optional[pd.DataFrame] = None,
                val_df: Optional[pd.DataFrame] = None,
                test_df: Optional[pd.DataFrame] = None, **kwargs) -> Tuple['HierarchicalDatasetFromDataFrame', ...]:
-        train_data = None if train_df is None else cls(train_df, **kwargs)
-        val_data = None if val_df is None else cls(val_df, **kwargs)
-        test_data = None if test_df is None else cls(test_df, **kwargs)
+        train_data = None if train_df is None else cls(path, train_df, **kwargs)
+        val_data = None if val_df is None else cls(path, val_df, **kwargs)
+        test_data = None if test_df is None else cls(path, test_df, **kwargs)
 
         return tuple(d for d in (train_data, val_data, test_data) if d is not None)
 
@@ -140,7 +152,8 @@ class HierarchicalDatasetFromFiles(HierarchicalDatasetFromDataFrame):
                  sort_col: Optional[str] = None, encoding: Optional[str] = None, **kwargs):
         paths = glob(f'{path}/*.*') if os.path.isdir(path) else [path]
         dfs = load_dfs(paths, format=file_format, encoding=encoding)
-        super().__init__(df=dfs, text_field=text_field, batch_col=batch_col, text_col=text_col, role_col=role_col,
+        super().__init__(path=path, df=dfs, text_field=text_field, batch_col=batch_col, text_col=text_col,
+                         role_col=role_col,
                          sort_col=sort_col, **kwargs)
 
     @classmethod

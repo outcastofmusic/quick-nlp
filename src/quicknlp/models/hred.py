@@ -67,7 +67,7 @@ class HRED(nn.Module):
         self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=emb_sz[-1], dropout=dropoutd,
                                                    tie_encoder=enc if tie_decoder else None
                                                    )
-        self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=nhid[-1])
+        self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=self.decoder.rnns[0].output_size)
         self.nt = ntoken[-1]
 
     def create_decoder_state(self, session_outputs):

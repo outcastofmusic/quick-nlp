@@ -106,7 +106,7 @@ def print_dialogue_batch(lr, dt, input_field, output_field, num_batches=1, num_s
         targets_str: BatchBeamTokens = dt.itos(target, output_field)
         for index, (inp, targ, pred) in enumerate(zip(inputs_str, targets_str, predictions_str)):
             print(
-                f'batch: {batch_num} sample : {index}\ninput: {" ".join(inp)}\ntarget: { " ".join(targ)}\nprediction: {" ".join(pred)}\n\n')
+                f'batch: {batch_num} sample : {index}\ninput: {"".join(inp)}\ntarget: { "".join(targ)}\nprediction: {"".join(pred)}\n\n')
             if 0 < num_sentences <= index - 1:
                 break
         if 0 < num_batches <= batch_num - 1:
