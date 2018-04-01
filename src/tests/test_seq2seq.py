@@ -1,9 +1,9 @@
 import pytest
+from fastai.core import V, to_gpu
 from torch.optim import Adam
 
-from fastai.core import V, to_gpu
+from quicknlp.data.s2s_model_data_loader import decoder_loss
 from quicknlp.models import Seq2Seq
-from quicknlp.data.s2s_model_data_loader import s2sloss
 from quicknlp.models.seq2seq_attention import Seq2SeqAttention
 from quicknlp.utils import get_trainable_parameters
 
@@ -41,7 +41,7 @@ def test_seq2seq_training_parameters(model, s2smodel):
     optimizer = Adam(model.parameters())
     output = model(*xs)
     optimizer.zero_grad()
-    loss = s2sloss(input=output[0], target=y, pad_idx=s2smodel.pad_idx)
+    loss = decoder_loss(input=output[0], target=y, pad_idx=s2smodel.pad_idx)
     loss.backward()
     model_parameters = get_trainable_parameters(model)
     grad_flow_parameters = get_trainable_parameters(model, grad=True)

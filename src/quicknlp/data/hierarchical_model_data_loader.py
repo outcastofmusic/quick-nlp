@@ -24,10 +24,9 @@ class HierarchicalModelData(ModelData, PrintingMixin):
 
     """
 
-    def __init__(self, path: str, text_field: Field, target_names: List[str],
-                 trn_ds: Dataset, val_ds: Dataset, test_ds: Dataset, bs: int,
-                 sort_key: Optional[Callable] = None,
-                 **kwargs):
+    def __init__(self, path: str, text_field: Field, target_names: List[str], trn_ds: Dataset, val_ds: Dataset,
+                 test_ds: Dataset, bs: int, sort_key: Optional[Callable] = None, max_context_size: int = 130000,
+                 backwards: bool = False, **kwargs):
         """ Constructor for the class. An important thing that happens here is
         that the field's "build_vocab" method is invoked, which builds the vocabulary
         for this NLP model.
@@ -45,6 +44,8 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             bs (int): the batch_size
             sort_key (Optional[Callable]): A function to sort the data in the batches. I should provide the name of a
                 field to use. If None the name of the first field in fields will be used to sort the batch.
+            max_context_size (Optional[int]: The maximums size of allowed context tensors (bs x cl xsl)
+                These will be filtered out so as not to run out of gpu memory
             backwards (bool): Reverse the order of the text or not (not implemented yet)
             **kwargs: Other arguments to be passed to the BucketIterator and the fields build_vocab function
         """
@@ -56,7 +57,8 @@ class HierarchicalModelData(ModelData, PrintingMixin):
         self.pad_idx = text_field.vocab.stoi[text_field.pad_token]
         self.eos_idx = text_field.vocab.stoi[text_field.eos_token]
 
-        trn_dl, val_dl, test_dl = [HierarchicalDataLoader(ds, bs, target_names=target_names, sort_key=sort_key)
+        trn_dl, val_dl, test_dl = [HierarchicalDataLoader(ds, bs, target_names=target_names, sort_key=sort_key,
+                                                          max_context_size=max_context_size, backwards=backwards)
                                    if ds is not None else None
                                    for ds in (trn_ds, val_ds, test_ds)]
         super().__init__(path=path, trn_dl=trn_dl, val_dl=val_dl, test_dl=test_dl)

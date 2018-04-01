@@ -14,9 +14,12 @@ LT = LongTensor
 
 
 class HierarchicalIterator(BucketIterator):
-    def __init__(self, dataset, batch_size, sort_key, target_roles=None, **kwargs):
+    def __init__(self, dataset, batch_size, sort_key, target_roles=None, max_context_size=130000, backwards=False,
+                 **kwargs):
         self.target_roles = target_roles
         self.text_field = dataset.fields['text']
+        self.max_context_size = max_context_size
+        self.backwards = backwards
         super(HierarchicalIterator, self).__init__(dataset=dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
 
     def process_minibatch(self, minibatch: List[Example]) -> Tuple[LT, LT, LT]:
@@ -67,13 +70,19 @@ class HierarchicalIterator(BucketIterator):
                 context, response, targets = self.process_minibatch(minibatch)
                 for index in range(context.shape[0]):
                     # do not yield if the target is just padding (does not provide anything to training)
-                    if (targets[index] != self.text_field.vocab.stoi[self.text_field.pad_token]).any():
-                        yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
-                                             train=self.train,
-                                             context=context[:index + 1],
-                                             response=response[index],
-                                             targets=targets[index]
-                                             )
+                    if (targets[index] == self.text_field.vocab.stoi[self.text_field.pad_token]).all():
+                        continue
+                    # skip examples with contexts that won't fit in gpu memory
+                    if np.prod(context[:index + 1].shape) > self.max_context_size:
+                        print(
+                            f"skipping context with size: {context[:index+1].shape}, and num items: {np.prod(context[:index+1].shape)}")
+                        continue
+                    yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
+                                         train=self.train,
+                                         context=context[:index + 1],
+                                         response=response[index],
+                                         targets=targets[index]
+                                         )
             if not self.repeat:
                 raise StopIteration
 
@@ -84,7 +93,7 @@ class HierarchicalIterator(BucketIterator):
            is not matching the target_roles will be padded completely.
         """
         indices = [0] + np.cumsum(example.sl).tolist()
-        minibatch = [example.text[indices[index]:indices[index + 1]] for index in range(len(indices) - 1)]
+        minibatch = self.get_minibatch_text(example, indices, backwards=self.backwards)
         field.fix_length = max_sl
         field.include_lengths = True
         padded, lens = field.pad(minibatch=minibatch)
@@ -97,3 +106,9 @@ class HierarchicalIterator(BucketIterator):
             lens.append(0)
             padded_roles.append(field.pad_token)
         return padded, lens, padded_roles
+
+    def get_minibatch_text(self, example: Example, indices: List[int], backwards: bool = False) -> List[List[str]]:
+        minibatch = [example.text[indices[index]:indices[index + 1]] for index in range(len(indices) - 1)]
+        if backwards:
+            minibatch = [i[::-1] for i in minibatch]
+        return minibatch

@@ -2,9 +2,9 @@ import pytest
 from fastai.core import V, to_gpu
 from torch.optim import Adam
 
-from quicknlp.data.model_helpers import EncoderDecoderModel, HREDModel
+from quicknlp.data.model_helpers import HREDModel
+from quicknlp.data.s2s_model_data_loader import decoder_loss
 from quicknlp.models import HRED
-from quicknlp.data.s2s_model_data_loader import s2sloss
 from quicknlp.utils import get_trainable_parameters
 
 params = [(True), (False)]
@@ -36,7 +36,7 @@ def test_hred_training_parameters(model, hredmodel):
     optimizer = Adam(model.parameters())
     output = model(*xs)
     optimizer.zero_grad()
-    loss = s2sloss(input=output[0], target=y, pad_idx=hredmodel.pad_idx)
+    loss = decoder_loss(input=output[0], target=y, pad_idx=hredmodel.pad_idx)
     loss.backward()
     model_parameters = get_trainable_parameters(model)
     grad_flow_parameters = get_trainable_parameters(model, grad=True)

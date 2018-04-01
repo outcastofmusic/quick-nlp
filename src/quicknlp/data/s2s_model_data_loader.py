@@ -19,7 +19,7 @@ from .model_helpers import PrintingMixin, check_columns_in_df, predict_with_seq2
 class EncoderDecoderLearner(Learner):
 
     def s2sloss(self, input, target, **kwargs):
-        return s2sloss(input=input, target=target, pad_idx=self.data.pad_idx, **kwargs)
+        return decoder_loss(input=input, target=target, pad_idx=self.data.pad_idx, **kwargs)
 
     def __init__(self, data, models, **kwargs):
         super().__init__(data, models, **kwargs)
@@ -219,7 +219,7 @@ class S2SModelData(ModelData, PrintingMixin):
         return self.to_model(m, opt_fn)
 
 
-def s2sloss(input, target, pad_idx, *args, **kwargs):
+def decoder_loss(input, target, pad_idx, *args, **kwargs):
     vocab = input.size(-1)
     # dims are sq-1 times bs times vocab
     input = input[:target.size(0)].view(-1, vocab).contiguous()
