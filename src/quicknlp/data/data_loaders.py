@@ -1,4 +1,4 @@
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Union
 
 from torchtext.data import Dataset, BucketIterator
 
@@ -44,14 +44,21 @@ class HierarchicalDataLoader:
     """Loads Hierarchical data into batches, including source and target"""
 
     def __init__(self, dataset: Dataset, batch_size: int, target_names: Optional[List[str]] = None,
-                 sort_key: Optional[Callable] = None, max_context_size: int = 130000, backwards=False, **kwargs):
+                 sort_key: Union[Callable, str] = "sl", max_context_size: int = 130000, backwards=False,
+                 **kwargs):
         self.dataset = dataset
         target_names = [target_names] if isinstance(target_names, str) else target_names
         # sort by the first field if no sort key is given
-        if sort_key is None:
-            # The default sorting is done by conversation length
+        if sort_key == "cl":
             def sort_key(x):
-                return x.roles
+                """sort examples by largest conversation length length in example"""
+                return len(x.roles)
+        elif sort_key == 'sl':
+            def sort_key(x):
+                """sort examples by largest utterance  length in example"""
+                return max(x.sl)
+        else:
+            assert callable(sort_key), "sort_key provided is not a function"
         self.dl = HierarchicalIterator(dataset, batch_size=batch_size, sort_key=sort_key, target_roles=target_names,
                                        max_context_size=max_context_size, **kwargs)
         self.bs = batch_size

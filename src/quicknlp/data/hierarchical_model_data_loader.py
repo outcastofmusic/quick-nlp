@@ -1,5 +1,5 @@
 from functools import partial
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Union
 
 import pandas as pd
 from fastai.core import to_gpu
@@ -25,7 +25,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
     """
 
     def __init__(self, path: str, text_field: Field, target_names: List[str], trn_ds: Dataset, val_ds: Dataset,
-                 test_ds: Dataset, bs: int, sort_key: Optional[Callable] = None, max_context_size: int = 130000,
+                 test_ds: Dataset, bs: int, sort_key: Union[Callable, str] = "sl", max_context_size: int = 130000,
                  backwards: bool = False, **kwargs):
         """ Constructor for the class. An important thing that happens here is
         that the field's "build_vocab" method is invoked, which builds the vocabulary
@@ -42,8 +42,9 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             val_ds (Dataset): a pytorch Dataset with the validation data
             test_ds (Dataset: a pytorch Dataset with the test data
             bs (int): the batch_size
-            sort_key (Optional[Callable]): A function to sort the data in the batches. I should provide the name of a
-                field to use. If None the name of the first field in fields will be used to sort the batch.
+            sort_key (Union[Callable,str]): if sort_key == "sl" sort by length of largest sequence in a dialogue,
+                or if sort_key == 'cl" sort by  conversation length. Alternative sort_key can be a function to sort
+                the examples based on some property of the examples ("roles", "sl", "text').
             max_context_size (Optional[int]: The maximums size of allowed context tensors (bs x cl xsl)
                 These will be filtered out so as not to run out of gpu memory
             backwards (bool): Reverse the order of the text or not (not implemented yet)
@@ -72,7 +73,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
     def from_dataframes(cls, path: str, text_field: Field, train_df: pd.DataFrame, val_df: pd.DataFrame,
                         text_col: str, batch_col: str, role_col: str, sort_col: str,
                         test_df: Optional[pd.DataFrame] = None, target_names: Optional[List[str]] = None, bs: int = 64,
-                        sort_key: Optional[Callable] = None,
+                        sort_key: Optional[Callable] = None, max_sl: int = 1000,
                         **kwargs) -> 'HierarchicalModelData':
         """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from dataframes
 
@@ -90,6 +91,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             sort_col (str): A column to sort the text for every batch_col, e.g. timestamps
             role_col (str): A column with the role of the person saying every text
             sort_key (Optional[Callable]): A function to sort the examples in batch size based on a field
+            max_sl (Int): The maximum sequence length allowed when creating examples dialogues with larger sl will be filtered out
             **kwargs:
 
         Returns:
@@ -108,6 +110,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                                                            text_col=text_col,
                                                            role_col=role_col,
                                                            sort_col=sort_col,
+                                                           max_sl=max_sl,
                                                            )
 
         train_ds = datasets[0]
@@ -121,7 +124,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                         text_col: str, batch_col: str, sort_col: str, role_col: str,
                         file_format: str,
                         test: Optional[str] = None, target_names: Optional[List[str]] = None, bs: Optional[int] = 64,
-                        sort_key: Optional[Callable] = None,
+                        sort_key: Optional[Callable] = None, max_sl: int = 1000,
                         **kwargs) -> 'HierarchicalModelData':
         """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from files
 
@@ -141,6 +144,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             file_format (str): The format of the file e.g. csv, json, tsv
             bs (Optional[int]): the batch size
             sort_key (Optional[Callable]): A function to sort the examples in batch size based on a field
+            max_sl (Int): The maximum sequence length allowed when creating examples dialogues with larger sl will be filtered out
             **kwargs:
 
         Returns:
@@ -157,7 +161,8 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                                                        batch_col=batch_col,
                                                        role_col=role_col,
                                                        sort_col=sort_col,
-                                                       file_format=file_format
+                                                       file_format=file_format,
+                                                       max_sl=max_sl
                                                        )
         trn_ds = datasets[0]
         val_ds = datasets[1]

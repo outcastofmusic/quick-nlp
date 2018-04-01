@@ -74,8 +74,6 @@ class HierarchicalIterator(BucketIterator):
                         continue
                     # skip examples with contexts that won't fit in gpu memory
                     if np.prod(context[:index + 1].shape) > self.max_context_size:
-                        print(
-                            f"skipping context with size: {context[:index+1].shape}, and num items: {np.prod(context[:index+1].shape)}")
                         continue
                     yield Batch.fromvars(dataset=self.dataset, batch_size=len(minibatch),
                                          train=self.train,

@@ -79,7 +79,7 @@ class TabularDatasetFromDataFrame(Dataset):
 
 
 def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]], batch_col: str,
-                            role_col: str, text_col: str, sort_col: str) -> Iterator[Example]:
+                            role_col: str, text_col: str, sort_col: str, max_sl=1000) -> Iterator[Example]:
     """convert df to dialogue examples"""
     df = [df] if not isinstance(df, list) else df
     for file_index, _df in enumerate(df):
@@ -93,14 +93,15 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
                 roles = "".join(conversation_tokens.str.cat(sep=" "))
                 example = Example.fromlist([text, roles], fields)
                 example.sl = text_with_roles_length.tolist()
-                yield example
+                # sanity check if the sl is much larger than expected ignore
+                if max(example.sl) < max_sl:
+                    yield example
 
 
 class HierarchicalDatasetFromDataFrame(Dataset):
 
     def __init__(self, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str,
-                 text_col: str,
-                 role_col: str, sort_col: str, path: Optional[str] = None, **kwargs):
+                 text_col: str, role_col: str, sort_col: str, path: Optional[str] = None, max_sl: int = 1000, **kwargs):
         """
 
         Args:
@@ -114,7 +115,7 @@ class HierarchicalDatasetFromDataFrame(Dataset):
         """
         fields = [("text", text_field), ("roles", text_field)]
         iterator = df_to_dialogue_examples(df, fields=fields, batch_col=batch_col, role_col=role_col,
-                                           sort_col=sort_col, text_col=text_col)
+                                           sort_col=sort_col, text_col=text_col, max_sl=max_sl)
         if path is not None:
             path = Path(path)
             examples_pickle = path / "examples.pickle"
@@ -131,37 +132,37 @@ class HierarchicalDatasetFromDataFrame(Dataset):
 
     @classmethod
     def splits(cls, path: Optional[str] = None, train_df: Optional[pd.DataFrame] = None,
-               val_df: Optional[pd.DataFrame] = None,
-               test_df: Optional[pd.DataFrame] = None, **kwargs) -> Tuple['HierarchicalDatasetFromDataFrame', ...]:
-        train_data = None if train_df is None else cls(path, train_df, **kwargs)
-        val_data = None if val_df is None else cls(path, val_df, **kwargs)
-        test_data = None if test_df is None else cls(path, test_df, **kwargs)
+               val_df: Optional[pd.DataFrame] = None, test_df: Optional[pd.DataFrame] = None,
+               max_sl: int = 1000, **kwargs) -> Tuple['HierarchicalDatasetFromDataFrame', ...]:
+        train_data = None if train_df is None else cls(path=path, df=train_df, max_sl=max_sl, **kwargs)
+        val_data = None if val_df is None else cls(path=path, df=val_df, **kwargs)
+        test_data = None if test_df is None else cls(path=path, df=test_df, **kwargs)
 
         return tuple(d for d in (train_data, val_data, test_data) if d is not None)
 
 
-def load_dfs(paths: str, format: str, encoding: Optional[str] = None) -> List[pd.DataFrame]:
-    if format in ["csv", "tsv"]:
-        sep = {"csv": ",", "tsv": "\t"}[format]
-        return [pd.read_csv(path, sep=sep, encoding=encoding) for path in paths if path.endswith(format)]
-    elif format == "json":
-        return [pd.read_json(path, encoding=encoding) for path in paths if path.endswith(format)]
+def load_dfs(paths: str, file_format: str, encoding: Optional[str] = None) -> List[pd.DataFrame]:
+    if file_format in ["csv", "tsv"]:
+        sep = {"csv": ",", "tsv": "\t"}[file_format]
+        return [pd.read_csv(path, sep=sep, encoding=encoding) for path in paths if path.endswith(file_format)]
+    elif file_format == "json":
+        return [pd.read_json(path, encoding=encoding) for path in paths if path.endswith(file_format)]
 
 
 class HierarchicalDatasetFromFiles(HierarchicalDatasetFromDataFrame):
     def __init__(self, path, file_format, text_field: Field, batch_col: str, text_col: str, role_col: str,
-                 sort_col: Optional[str] = None, encoding: Optional[str] = None, **kwargs):
+                 sort_col: Optional[str] = None, encoding: Optional[str] = None, max_sl: int = 1000, **kwargs):
         paths = glob(f'{path}/*.*') if os.path.isdir(path) else [path]
-        dfs = load_dfs(paths, format=file_format, encoding=encoding)
+        dfs = load_dfs(paths, file_format=file_format, encoding=encoding)
         super().__init__(path=path, df=dfs, text_field=text_field, batch_col=batch_col, text_col=text_col,
-                         role_col=role_col,
-                         sort_col=sort_col, **kwargs)
+                         role_col=role_col, sort_col=sort_col, max_sl=max_sl, **kwargs)
 
     @classmethod
     def splits(cls, path: str, train_path: Optional[str] = None, val_path: Optional[str] = None,
-               test_path: Optional[str] = None, **kwargs) -> Tuple['HierarchicalDatasetFromFiles', ...]:
-        train_data = None if train_path is None else cls(os.path.join(path, train_path), **kwargs)
-        val_data = None if val_path is None else cls(os.path.join(path, val_path), **kwargs)
-        test_data = None if test_path is None else cls(os.path.join(path, test_path), **kwargs)
+               test_path: Optional[str] = None, max_sl: int = 1000, **kwargs) -> Tuple[
+        'HierarchicalDatasetFromFiles', ...]:
+        train_data = None if train_path is None else cls(path=os.path.join(path, train_path), max_sl=max_sl, **kwargs)
+        val_data = None if val_path is None else cls(path=os.path.join(path, val_path), max_sl=max_sl, **kwargs)
+        test_data = None if test_path is None else cls(path=os.path.join(path, test_path), max_sl=max_sl, **kwargs)
 
         return tuple(d for d in (train_data, val_data, test_data) if d is not None)
