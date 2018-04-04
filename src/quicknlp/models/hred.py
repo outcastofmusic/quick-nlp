@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastai.lm_rnn import repackage_var
 
-from quicknlp.utils import get_list, assert_dims, get_kwarg
 from quicknlp.modules import EmbeddingRNNEncoder, RNNEncoder, EmbeddingRNNDecoder, Projection
+from quicknlp.utils import get_list, assert_dims, get_kwarg
 
 HParam = Union[List[int], int]
 
@@ -66,7 +66,7 @@ class HRED(nn.Module):
                                            **kwargs
                                            )
         enc = self.decoder.encoder if tie_decoder else None
-        self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=nhid[-1],nhid=emb_sz[-1], dropout=dropoutd,
+        self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=nhid[-1], nhid=emb_sz[-1], dropout=dropoutd,
                                                    tie_encoder=enc if tie_decoder else None
                                                    )
         self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=self.decoder.rnns[0].output_size)

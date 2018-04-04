@@ -124,7 +124,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                         text_col: str, batch_col: str, sort_col: str, role_col: str,
                         file_format: str,
                         test: Optional[str] = None, target_names: Optional[List[str]] = None, bs: Optional[int] = 64,
-                        sort_key: Optional[Callable] = None, max_sl: int = 1000,
+                        sort_key: Union[Callable, str] = "sl", max_sl: int = 1000,
                         **kwargs) -> 'HierarchicalModelData':
         """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from files
 
@@ -143,7 +143,8 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             role_col (str): A column with the role of the person saying every text
             file_format (str): The format of the file e.g. csv, json, tsv
             bs (Optional[int]): the batch size
-            sort_key (Optional[Callable]): A function to sort the examples in batch size based on a field
+            sort_key (Union[Callable,str]): A function to sort the examples in batch size based on a field or
+                sl for sorting by sequence length, or cl for sorting by conversation length
             max_sl (Int): The maximum sequence length allowed when creating examples dialogues with larger sl will be filtered out
             **kwargs:
 

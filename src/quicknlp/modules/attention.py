@@ -13,12 +13,12 @@ class Attention(nn.Module):
         raise NotImplementedError
 
     def forward(self, query, keys, values):
-        # Query dim [bs, dims
-        # keys dim [sl, bs, dim]
-        # values dim [sl, bs, dim]
+        # Query dim [bs, dimQ]
+        # keys dim [sl, bs, dimK]
+        # values dim [sl, bs, dimV]
         scores = [self.score(query, key) for key in keys]
         scores = F.softmax(tr.stack(scores, dim=0), dim=0)
-        return tr.sum(scores * values, dim=0)
+        return (scores * values).sum(dim=0)
 
 
 class MLPAttention(Attention):
@@ -50,3 +50,36 @@ class SDPAttention(Attention):
 
     def score(self, query, key):
         return (query * key).sum(dim=-1).view(-1, 1) / self.scale
+
+
+class MultiHeadAttention(Attention):
+
+    def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim):
+        super().__init__()
+        self.num_heads = num_heads
+        self.nhid = nhid
+        self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.num_heads * self.nhid, bias=False)
+        self.query_linear = nn.Linear(in_features=query_dim, out_features=self.num_heads * self.nhid, bias=False)
+        self.values_dim = nn.Linear(in_features=values_dim, out_features=self.num_heads * self.nhid, bias=False)
+        self.attention = SDPAttention(self.nhid)
+
+    def forward(self, query, keys, values):
+        # Query dim [bs, dimQ]
+        # keys dim [sl, bs, dimK]
+        # values dim [sl, bs, dimV]
+
+        # [bs, dimH *NH]
+        query_projection = self.query_linear(query)
+        sl, bs, dimK = keys.size()
+        # [sl, bs, dimH *NH]
+        keys_projection = self.keys_linear(keys.view(-1, keys.size(-1))).view(sl, bs, -1)
+        # [sl, bs, dimH *NH]
+        values_projection = self.keys_linear(values.view(-1, values.size(-1))).view(sl, bs, -1)
+        # split the heads and calculate the attentions
+        query_heads = tr.split(query_projection, split_size=self.nhid, dim=-1)
+        key_heads = tr.split(keys_projection, split_size=self.nhid, dim=-1)
+        value_heads = tr.split(values_projection, split_size=self.nhid, dim=-1)
+        heads = []
+        for q, k, v in zip(query_heads, key_heads, value_heads):
+            heads.append(self.attention.forward(q, k, v))
+        return tr.cat(heads, dim=-1)
