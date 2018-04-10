@@ -5,7 +5,7 @@ Quick NLP
 
 **Quick NLP**  is a deep learning nlp library inspired by the `fast.ai library  <https://github.com/fastai/fastai>`_
 
-It follows the same api as fastai allowing for quick and easy running of nlp models
+It follows the same api as fastai and extends it allowing for quick and easy running of nlp models
 
 Features
 ########
@@ -13,16 +13,16 @@ Features
 - Python 3.6 code
 - Tight-knit integration with Fast.ai library:
     - Fast.ai style DataLoader objects for sentence to sentence algorithms
-    - Fast.ai style DataLoader objects for dialogue algorithms (TODO)
+    - Fast.ai style DataLoader objects for dialogue algorithms
     - Fast.ai style DataModel objects for training nlp models
 - Can run a seq2seq model with a few lines of code similar to existing fast.ai examples
 - Easy to expand/train and try different models or use different data
 - Ready made algorithms to try out
-    - Seq2Seq
-    - Seq2Seq with Attention
-    - Attention is all you need (TODO)
-    - Convolutional Seq2Seq (TODO)
-    - HRED (TODO)
+    - Seq2Seq https://arxiv.org/abs/1506.05869
+    - Seq2Seq with Attention https://arxiv.org/abs/1703.03906
+    - HRED http://www.aaai.org/ocs/index.php/AAAI/AAAI17/paper/download/14567/14219
+    - Attention is all you need (In Progress) http://papers.nips.cc/paper/7181-attention-is-all-you-need
+    - Depthwise Separable Convolutions for Neural Machine Translation (TODO) https://arxiv.org/abs/1706.03059
 
 
 Installation
