@@ -1,6 +1,6 @@
-from quicknlp.utils import assert_dims
-from .seq2seq import Seq2Seq, HParam, get_list
 from quicknlp.modules import RNNAttentionDecoder, EmbeddingRNNEncoder, AttentionProjection
+from quicknlp.utils import assert_dims, HParam
+from .seq2seq import Seq2Seq, get_list
 
 
 class Seq2SeqAttention(Seq2Seq):

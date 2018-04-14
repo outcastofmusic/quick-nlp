@@ -9,6 +9,8 @@ from quicknlp.data.model_helpers import BatchBeamTokens
 
 States = List[Tuple[torch.Tensor, torch.Tensor]]
 
+HParam = Union[List[int], int]
+
 
 def concat_bidir_state(states: States) -> States:
     state = []

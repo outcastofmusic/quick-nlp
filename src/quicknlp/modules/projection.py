@@ -1,10 +1,11 @@
+from collections import OrderedDict
+
 import torch
 from fastai.rnn_reg import LockedDropout
 from torch import nn as nn
 
 from quicknlp.utils import assert_dims
 from .attention import MLPAttention, SDPAttention
-import torch.nn.functional as F
 
 
 class Projection(nn.Module):
@@ -12,29 +13,29 @@ class Projection(nn.Module):
 
     def __init__(self, n_out: int, n_in: int, dropout: float, nhid: int = None, tie_encoder=None):
         super().__init__()
-        layers = []
+        layers = OrderedDict()
         self.dropout = LockedDropout(dropout)
         if nhid is not None:
             linear1 = nn.Linear(n_in, nhid)
             linear1.weight.data.uniform_(-self.initrange, self.initrange)
-            layers.append(linear1)
+            layers["projection1"] = linear1
             dropout1 = nn.Dropout(dropout)
-            layers.append(dropout1)
+            layers["dropout"] = dropout1
         else:
             nhid = n_in
         linear2 = nn.Linear(nhid, n_out, bias=False)
         if tie_encoder:
             linear2.weight = tie_encoder.weight
-        layers.append(linear2)
-        self.layers = nn.Sequential(*layers)
+        layers["projection2"] = linear2
+        self.layers = nn.Sequential(layers)
 
-    def forward(self, input):
+    def forward(self, projection_input):
         # input should be sl, bs, input_dim
 
-        output = self.dropout(input)
+        output = self.dropout(projection_input)
         decoded = output.view(output.size(0) * output.size(1), output.size(2))
         decoded = self.layers(decoded)
-        return decoded.view(-1, input.size(1), decoded.size(1))
+        return decoded.view(-1, projection_input.size(1), decoded.size(1))
 
 
 class AttentionProjection(nn.Module):

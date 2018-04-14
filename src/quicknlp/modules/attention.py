@@ -2,12 +2,14 @@ import numpy as np
 import torch as tr
 import torch.nn as nn
 import torch.nn.functional as F
+from fastai.rnn_reg import LockedDropout
 
 
 class Attention(nn.Module):
 
-    def __init__(self, ):
+    def __init__(self, p=0.0):
         super(Attention, self).__init__()
+        self.dropout = LockedDropout(p) if p > 0.0 else None
 
     def score(self, query, key):
         raise NotImplementedError
@@ -18,6 +20,8 @@ class Attention(nn.Module):
         # values dim [sl, bs, dimV]
         scores = [self.score(query, key) for key in keys]
         scores = F.softmax(tr.stack(scores, dim=0), dim=0)
+        if self.dropout is not None:
+            scores = self.dropout(scores)
         return (scores * values).sum(dim=0)
 
 
@@ -44,8 +48,8 @@ class MLPAttention(Attention):
 class SDPAttention(Attention):
     """Scaled Dot Product Attention Vaswani et al. 2017"""
 
-    def __init__(self, in_features):
-        super(SDPAttention, self).__init__()
+    def __init__(self, in_features, p=0.0):
+        super(SDPAttention, self).__init__(p=p)
         self.scale = np.sqrt(in_features)
 
     def score(self, query, key):
@@ -54,14 +58,14 @@ class SDPAttention(Attention):
 
 class MultiHeadAttention(Attention):
 
-    def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim):
+    def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim, p=0.0):
         super().__init__()
         self.num_heads = num_heads
         self.nhid = nhid
         self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.num_heads * self.nhid, bias=False)
         self.query_linear = nn.Linear(in_features=query_dim, out_features=self.num_heads * self.nhid, bias=False)
         self.values_dim = nn.Linear(in_features=values_dim, out_features=self.num_heads * self.nhid, bias=False)
-        self.attention = SDPAttention(self.nhid)
+        self.attention = SDPAttention(self.nhid, p=p)
 
     def forward(self, query, keys, values):
         # Query dim [bs, dimQ]

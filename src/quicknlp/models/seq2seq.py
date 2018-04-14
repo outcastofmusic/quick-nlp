@@ -1,11 +1,8 @@
-from typing import List, Union
 
 import torch.nn as nn
 
 from quicknlp.modules import EmbeddingRNNDecoder, EmbeddingRNNEncoder, Projection
-from quicknlp.utils import get_list, concat_bidir_state, assert_dims
-
-HParam = Union[List[int], int]
+from quicknlp.utils import get_list, concat_bidir_state, assert_dims, HParam
 
 
 class Seq2Seq(nn.Module):
