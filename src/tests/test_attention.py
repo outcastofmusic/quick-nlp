@@ -52,7 +52,8 @@ def test_MultiHeadAttention(attention_setup):
     eq = query.size(1)
     num_heads = 4
     nhid = 10
-    attention = to_gpu(MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ed, query_dim=eq, values_dim=eq))
+    attention = to_gpu(
+        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ed, query_dim=eq, values_dim=eq, p=0.3))
 
     result = attention(query=V(query), keys=V(keys), values=V(keys))
     assert_dims(result, [bs, num_heads * nhid])

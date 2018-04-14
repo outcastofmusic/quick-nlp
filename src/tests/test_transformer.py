@@ -11,7 +11,7 @@ def test_transfomer_layer():
     in_features = 32
     inputs = tr.randn([sl, bs, in_features])
     inputs = to_gpu(V(T(inputs)))
-    transfomer = to_gpu(TransformerLayer(in_features=in_features, num_heads=8))
+    transfomer = to_gpu(TransformerLayer(in_features=in_features, num_heads=8, ffnhid=64))
     outputs = transfomer(inputs)
     assert_dims(outputs, [sl, bs, in_features])
 
@@ -22,6 +22,6 @@ def test_transfomer_layer_decoder():
     in_features = 32
     inputs = tr.randn([sl, bs, in_features])
     inputs = to_gpu(V(T(inputs)))
-    transfomer = to_gpu(TransformerLayerDecoder(in_features=in_features, num_heads=8))
-    outputs = transfomer(inputs, inputs)
+    transformer = to_gpu(TransformerLayerDecoder(in_features=in_features, num_heads=8, ffnhid=64))
+    outputs = transformer(inputs, inputs)
     assert_dims(outputs, [sl, bs, in_features])

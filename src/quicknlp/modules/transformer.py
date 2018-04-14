@@ -1,71 +1,94 @@
 import torch as tr
 import torch.nn as nn
-from fastai.rnn_reg import LockedDropout
 
+from quicknlp.utils import get_list
 from .attention import MultiHeadAttention
 from .layer_norm import LayerNorm
 
 
-class TransformerLayer(nn.Module):
+class PositionFeedForward(nn.Module):
 
-    def __init__(self, in_features, num_heads, p=0.5):
+    def __init__(self, in_features, out_features, nhid, p):
+        super().__init__()
+        self.in_featuers = in_features
+        self.out_features = out_features
+        self.nhid = nhid
+        self.ff = nn.Sequential(nn.Linear(in_features=self.in_featuers, out_features=self.nhid),
+                                nn.ReLU(),
+                                nn.Linear(in_features=self.nhid, out_features=self.out_features),
+                                nn.Dropout(p)
+                                )
+
+    def forward(self, inputs):
+        return self.ff(inputs)
+
+
+class SubLayer(nn.Module):
+
+    def __init__(self, in_features):
+        super().__init__()
+        self.in_features = in_features,
+        self.layer_norm = LayerNorm(self.in_features)
+
+    def forward(self, input_tensor, sublayer):
+        return input_tensor + sublayer(self.layer_norm(input_tensor))
+
+
+class AttentionLayer(nn.Module):
+    def __init__(self, in_features, num_heads, p):
         super().__init__()
         self.dim = in_features
         self.nhid = in_features // num_heads
         self.attention = MultiHeadAttention(num_heads=num_heads, nhid=self.nhid,
-                                            keys_dim=self.dim, values_dim=self.dim, query_dim=self.dim)
-        self.layernorm1 = LayerNorm(self.dim)
-        self.dropout1 = LockedDropout(p)
-        self.linear = nn.Linear(in_features=self.dim, out_features=self.dim)
-        self.dropout2 = LockedDropout(p)
-        self.layernorm2 = LayerNorm(self.dim)
+                                            keys_dim=self.dim, values_dim=self.dim, query_dim=self.dim, p=p)
+
+    def forward(self, input_tensor, keys_vector, values_vector, mask=False):
+        self_attention_outputs = []
+        for index, input_step in enumerate(input_tensor, 1):
+            mask_index = index if mask else input_tensor.shape[0]
+            self_attention_outputs.append(
+                self.attention(query=input_step, keys=keys_vector[:mask_index],
+                               values=values_vector[:mask_index]))  # dims [bs, dims]
+        return tr.stack(self_attention_outputs, dim=0)
+
+
+class TransformerLayer(nn.Module):
+    def __init__(self, in_features, num_heads, ffnhid=2048, p=0.5):
+        super().__init__()
+        self.dim = in_features
+        self.nhid = in_features // num_heads
+        self.attention = AttentionLayer(in_features=in_features, num_heads=num_heads, p=p)
+        self.linear = PositionFeedForward(in_features=in_features, out_features=in_features, nhid=ffnhid, p=p)
+        self.sublayers = nn.ModuleList([SubLayer(in_features=in_features), SubLayer(in_features=in_features)])
 
     def forward(self, input_tensor):
         shape = input_tensor.size()
-        residual = input_tensor  # dims [sl, bs, dims]
-        self_attention_outputs = []
-        for input_step in input_tensor:
-            self_attention_outputs.append(
-                self.attention(query=input_step, keys=input_tensor, values=input_tensor))  # dims [bs, dims]
-        outputs = tr.stack(self_attention_outputs, dim=0)
-        outputs = self.dropout1(outputs)
-        outputs += residual
-        outputs = self.layernorm1(outputs)
-        residual2 = outputs
-        outputs = self.linear(outputs.view(-1, self.dim)).view(shape)
-        outputs = self.dropout2(outputs)
-        outputs += residual2
-        outputs = self.layernorm2(outputs)
-        return outputs
+        attention_output = self.sublayers[0](input_tensor, lambda x: self.attention(x, x, x))
+        ff_output = self.sublayers[1](attention_output.view(-1, self.dim), self.linear).view(shape)
+        return ff_output
 
 
 class TransformerLayerDecoder(TransformerLayer):
 
-    def __init__(self, in_features, num_heads, p=0.1):
-        super().__init__(in_features=in_features, num_heads=num_heads, p=p)
-        self.attention2 = MultiHeadAttention(num_heads=num_heads, nhid=self.nhid,
-                                             keys_dim=self.dim, values_dim=self.dim, query_dim=self.dim)
-        self.dropout3 = LockedDropout(p)
-        self.layernorm3 = LayerNorm(self.dim)
+    def __init__(self, in_features, num_heads, ffnhid, p=0.1):
+        super().__init__(in_features=in_features, num_heads=num_heads, ffnhid=ffnhid, p=p)
+        self.decoder_attention = AttentionLayer(in_features=in_features, num_heads=num_heads, p=p)
+        self.sublayers.append(SubLayer(in_features=in_features))
 
-    # noinspection PyMethodOverriding
-    def forward(self, encoder_input, decoder_input):
+    def forward(self, *inputs):
+        encoder_input, decoder_input = inputs
         shape = decoder_input.size()
-        residual1 = decoder_input  # dims [sl, bs, dims]
-        self_attention_outputs = []
-        for index, input_step in enumerate(decoder_input, start=1):
-            self_attention_outputs.append(
-                self.attention(query=input_step, keys=decoder_input[:index], values=decoder_input[:index]))
-        outputs = tr.stack(self_attention_outputs, dim=0)
-        outputs = self.layernorm1(outputs + residual1)
-        residual2 = outputs
-        attention_outputs = []
-        for decoder_step in outputs:
-            attention_outputs.append(self.attention2(query=decoder_step, keys=encoder_input, values=encoder_input))
-        outputs = tr.stack(attention_outputs, dim=0)
-        outputs = self.layernorm2(outputs + residual2)
-        residual3 = outputs
-        outputs = self.linear(outputs.view(-1, self.dim)).view(shape)
-        outputs = self.dropout3(outputs)
-        outputs = self.layernorm3(outputs + residual3)
-        return outputs
+        att_output = self.sublayers[0](decoder_input, lambda x: self.attention(x, x, x, mask=True))
+        dec_att_output = self.sublayers[1](att_output, lambda x: self.attention(x, encoder_input, encoder_input))
+        ff_output = self.sublayers[2](dec_att_output.view(-1, self.dim), self.linear).view(shape)
+        return ff_output
+
+
+class TransformerEncoder(nn.Module):
+
+    def __init__(self, num_layers, in_features, num_heads, ffnhid, p):
+        super().__init__()
+        ffnhid = get_list(ffnhid, num_layers)
+        self.layers = nn.ModuleList(
+            [TransformerLayer(in_features=in_features, ffnhid=ffnhid[i], p=p, num_heads=num_heads[i]) for i in
+             range(num_layers)])
