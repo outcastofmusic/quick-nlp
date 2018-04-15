@@ -1,0 +1,2 @@
+# qt5 doesn't seem to work with matplotlib and conda currenty this is a workaround
+backend : TkAgg

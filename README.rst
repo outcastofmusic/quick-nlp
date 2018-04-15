@@ -5,28 +5,28 @@ Quick NLP
 
 **Quick NLP**  is a deep learning nlp library inspired by the `fast.ai library  <https://github.com/fastai/fastai>`_
 
-It follows the same api as fastai allowing for quick and easy running of nlp models
+It follows the same api as fastai and extends it allowing for quick and easy running of nlp models
 
 Features
-########
+--------
 
 - Python 3.6 code
 - Tight-knit integration with Fast.ai library:
     - Fast.ai style DataLoader objects for sentence to sentence algorithms
-    - Fast.ai style DataLoader objects for dialogue algorithms (TODO)
+    - Fast.ai style DataLoader objects for dialogue algorithms
     - Fast.ai style DataModel objects for training nlp models
 - Can run a seq2seq model with a few lines of code similar to existing fast.ai examples
 - Easy to expand/train and try different models or use different data
 - Ready made algorithms to try out
-    - Seq2Seq
-    - Seq2Seq with Attention
-    - Attention is all you need (TODO)
-    - Convolutional Seq2Seq (TODO)
-    - HRED (TODO)
+    - Seq2Seq https://arxiv.org/abs/1506.05869
+    - Seq2Seq with Attention https://arxiv.org/abs/1703.03906
+    - HRED http://www.aaai.org/ocs/index.php/AAAI/AAAI17/paper/download/14567/14219
+    - Attention is all you need (In Progress) http://papers.nips.cc/paper/7181-attention-is-all-you-need
+    - Depthwise Separable Convolutions for Neural Machine Translation (TODO) https://arxiv.org/abs/1706.03059
 
 
 Installation
-###############
+------------
 
 Installation of fast.ai library is required. Please install using the instructions `here <https://github.com/fastai/fastai>`_ .
 It is important that the latest version of fast.ai is used and not the pip version which is not up to date.
@@ -34,16 +34,26 @@ It is important that the latest version of fast.ai is used and not the pip versi
 
 After setting up an environment using the fasta.ai instructions please clone the quick-nlp repo and use pip install to install the package as follows:
 
-.. code-block::bash
+.. code-block:: bash
 
     git clone https://github.com/outcastofmusic/quick-nlp
     cd quick-nlp
     pip install .
 
 
+Docker Image
+~~~~~~~~~~~~
+
+A docker image with the latest master is available to run it please run:
+
+.. code-block:: bash
+    
+    docker run --runtime nvidia -it -p 8888:8888 --mount type=bind,source="$(pwd)",target=/workspace agispof/quicknlp:latest
+
+this will mount your current directory to /workspace and start a jupyter lab session in that directory
 
 Usage Example
-#############
+-------------
 
 The main goal of quick-nlp is to provided the easy interface of the fast.ai library for seq2seq models.
 
