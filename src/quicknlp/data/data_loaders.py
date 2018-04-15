@@ -1,6 +1,7 @@
-from typing import List, Optional, Callable, Union
+from typing import Callable, List, Optional, Union
 
-from torchtext.data import Dataset, BucketIterator
+import torch.cuda as cuda
+from torchtext.data import BucketIterator, Dataset
 
 from quicknlp.data.iterators import HierarchicalIterator
 
@@ -20,7 +21,8 @@ class S2SDataLoader:
         if sort_key is None:
             def sort_key(x):
                 return getattr(x, self.source_names[0])
-        self.dl = BucketIterator(dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
+        device = None if cuda.is_available() else -1
+        self.dl = BucketIterator(dataset, batch_size=batch_size, sort_key=sort_key, device=device, **kwargs)
         self.bs = batch_size
         self.iter = 0
 

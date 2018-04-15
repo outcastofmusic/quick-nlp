@@ -15,11 +15,15 @@ RUN wget --quiet https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86
   apt-get clean && \
   rm -rf /var/lib/apt/lists/*
 
+# install fastai
 COPY fastai /opt/fastai
 RUN ["/bin/bash", "-c", "cd /opt/fastai && conda env update && source activate fastai && cd /opt/fastai && pip install -e ."]
+# install quick nlp
 COPY setup.py /opt/quicknlp/
 COPY src /opt/quicknlp/src
+# setup matplotlib
 COPY matplotlibrc /root/.config/matplotlib
+# setup jupyter lab
 COPY jupyter_notebook_config.py /root/.jupyter/
 RUN ["/bin/bash", "-c", "source activate fastai && cd /opt/quicknlp && pip install -e . && conda install jupyterlab && jupyter serverextension enable --py jupyterlab --sys-prefix"]
 EXPOSE 8888
