@@ -49,6 +49,7 @@ A docker image with the latest master is available to run it please run:
 this will mount your current directory to /workspace and start a jupyter lab session in that directory
 
 .. code-block::bash
+
     docker run --runtime nvidia -it -p 8888:8888 --mount type=bind,source="$(pwd)",target=/workspace agispof/quicknlp:latest
 
 
