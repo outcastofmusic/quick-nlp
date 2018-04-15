@@ -1,9 +1,10 @@
 from doctest import Example
-from typing import List, Tuple, Optional, Iterator
+from typing import Iterator, List, Optional, Tuple
 
 import numpy as np
+import torch.cuda as cuda
 from torch import LongTensor
-from torchtext.data import BucketIterator, Batch, Field
+from torchtext.data import Batch, BucketIterator, Field
 
 from quicknlp.utils import assert_dims
 
@@ -20,7 +21,9 @@ class HierarchicalIterator(BucketIterator):
         self.text_field = dataset.fields['text']
         self.max_context_size = max_context_size
         self.backwards = backwards
-        super(HierarchicalIterator, self).__init__(dataset=dataset, batch_size=batch_size, sort_key=sort_key, **kwargs)
+        device = None if cuda.is_available() else -1
+        super(HierarchicalIterator, self).__init__(dataset=dataset, batch_size=batch_size, sort_key=sort_key,
+                                                   device=device, **kwargs)
 
     def process_minibatch(self, minibatch: List[Example]) -> Tuple[LT, LT, LT]:
         max_sl = max([max(ex.sl) for ex in minibatch])
@@ -85,7 +88,7 @@ class HierarchicalIterator(BucketIterator):
                 raise StopIteration
 
     def pad(self, example: Example, max_sl: int, max_conv: int, field: Field, target_roles: Optional[Roles] = None) -> \
-            Tuple[Conversations, Lengths, Roles]:
+        Tuple[Conversations, Lengths, Roles]:
         """Pad a hierarchical example to the max sequence length and max conv length provided. Optionally if
            target_roles parameter is provided every sentence whose role, found from example.roles,
            is not matching the target_roles will be padded completely.
