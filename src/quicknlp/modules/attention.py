@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastai.rnn_reg import LockedDropout
 
+from quicknlp.utils import assert_dims
+
 
 class Attention(nn.Module):
 
@@ -62,10 +64,12 @@ class MultiHeadAttention(Attention):
         super().__init__()
         self.num_heads = num_heads
         self.nhid = nhid
-        self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.num_heads * self.nhid, bias=False)
-        self.query_linear = nn.Linear(in_features=query_dim, out_features=self.num_heads * self.nhid, bias=False)
-        self.values_dim = nn.Linear(in_features=values_dim, out_features=self.num_heads * self.nhid, bias=False)
+        self.out_dim = self.nhid * num_heads
+        self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.out_dim, bias=False)
+        self.query_linear = nn.Linear(in_features=query_dim, out_features=self.out_dim, bias=False)
+        self.values_dim = nn.Linear(in_features=values_dim, out_features=self.out_dim, bias=False)
         self.attention = SDPAttention(self.nhid, p=p)
+        self.linear = nn.Linear(in_features=self.out_dim, out_features=self.out_dim, bias=False)
 
     def forward(self, query, keys, values):
         # Query dim [bs, dimQ]
@@ -86,4 +90,6 @@ class MultiHeadAttention(Attention):
         heads = []
         for q, k, v in zip(query_heads, key_heads, value_heads):
             heads.append(self.attention.forward(q, k, v))
-        return tr.cat(heads, dim=-1)
+        outputs = tr.cat(heads, dim=-1)
+        assert_dims(outputs, [bs, self.out_dim])
+        return self.linear(outputs)
