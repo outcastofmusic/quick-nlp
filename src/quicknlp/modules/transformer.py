@@ -3,9 +3,11 @@ from collections import OrderedDict
 import torch as tr
 import torch.nn as nn
 
+from quicknlp.modules.embeddings import NormEmbeddings, PositionalEncoding
 from quicknlp.utils import get_list
 from .attention import MultiHeadAttention
 from .layer_norm import LayerNorm
+import torch
 
 
 class PositionFeedForward(nn.Module):
@@ -88,18 +90,70 @@ class TransformerLayerDecoder(TransformerLayer):
 
 class TransformerEncoder(nn.Module):
 
-    def __init__(self, num_layers, in_features, num_heads, ffnhid, p=0.1):
+    def __init__(self, num_layers, in_features, num_heads, ffnhid, dropout=0.1):
         super().__init__()
         ffnhid = get_list(ffnhid, num_layers)
         num_heads = get_list(num_heads, num_layers)
-        layers = OrderedDict()
-        for i in range(num_layers):
-            layers["encoder_layer_{}".format(i)] = TransformerLayer(in_features=in_features, ffnhid=ffnhid[i], p=p,
-                                                                    num_heads=num_heads[i])
-        self.layers = nn.Sequential(layers)
+
+        self.layers = nn.ModuleList(
+            [TransformerLayer(in_features=in_features, ffnhid=ffnhid[i], p=dropout, num_heads=num_heads[i]) for i in
+             range(num_layers)])
 
     def forward(self, input_tensors):
-        return self.layers(input_tensors)
+        output_tensors = []
+        inputs = input_tensors
+        for layer in self.layers:
+            inputs = layer(inputs)
+            output_tensors.append(inputs)
 
-    # class TrasformerEncoderEmbedding(nn.Module):
-#     pass
+        return inputs, output_tensors
+
+
+class TransformerEncoderEmbedding(TransformerEncoder):
+    def __init__(self, vocab, num_layers, in_features, num_heads, ffnhid, dropout=0.1, padding_idx=None, max_len=5000):
+        super().__init__(num_layers=num_layers, in_features=in_features,
+                         num_heads=num_heads, ffnhid=ffnhid, dropout=dropout
+                         )
+        self.embeddings = nn.Sequential(
+            NormEmbeddings(in_features=in_features, vocab=vocab, padding_idx=padding_idx),
+            PositionalEncoding(in_features=in_features, dropout=dropout, max_len=max_len)
+        )
+
+    def forward(self, input_tensors):
+        embeddings = self.embeddings(input_tensors)
+        return super().forward(embeddings)
+
+
+class TransformerDecoder(nn.Module):
+    def __init__(self, num_layers, in_features, num_heads, ffnhid, dropout=0.1):
+        super().__init__()
+        ffnhid = get_list(ffnhid, num_layers)
+        num_heads = get_list(num_heads, num_layers)
+
+        self.layers = nn.ModuleList(
+            [TransformerLayerDecoder(in_features=in_features, ffnhid=ffnhid[i],
+                                     p=dropout, num_heads=num_heads[i]) for i in range(num_layers)])
+
+    def forward(self, *inputs):
+        encoder_inputs, decoder_inputs = inputs
+        output_tensors = []
+        dec_inputs = decoder_inputs
+        for enc_inputs, layer in zip(encoder_inputs, self.layers):
+            dec_inputs = layer(enc_inputs, dec_inputs)
+            output_tensors.append(dec_inputs)
+        return dec_inputs, output_tensors
+
+
+class TransformerDecoderEmbedding(TransformerDecoder):
+    def __init__(self, vocab, num_layers, in_features, num_heads, ffnhid, dropout=0.1, padding_idx=None, max_len=5000):
+        super().__init__(num_layers=num_layers, in_features=in_features,
+                         num_heads=num_heads, ffnhid=ffnhid, dropout=dropout
+                         )
+        self.embeddings = nn.Sequential(
+            NormEmbeddings(in_features=in_features, vocab=vocab, padding_idx=padding_idx),
+            PositionalEncoding(in_features=in_features, dropout=dropout, max_len=max_len)
+        )
+
+    def forward(self, input_tensors):
+        embeddings = self.embeddings(input_tensors)
+        return super().forward(embeddings)
