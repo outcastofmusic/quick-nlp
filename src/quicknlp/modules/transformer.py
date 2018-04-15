@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import torch as tr
 import torch.nn as nn
 
@@ -10,10 +12,10 @@ class PositionFeedForward(nn.Module):
 
     def __init__(self, in_features, out_features, nhid, p):
         super().__init__()
-        self.in_featuers = in_features
+        self.in_features = in_features
         self.out_features = out_features
         self.nhid = nhid
-        self.ff = nn.Sequential(nn.Linear(in_features=self.in_featuers, out_features=self.nhid),
+        self.ff = nn.Sequential(nn.Linear(in_features=self.in_features, out_features=self.nhid),
                                 nn.ReLU(),
                                 nn.Linear(in_features=self.nhid, out_features=self.out_features),
                                 nn.Dropout(p)
@@ -49,7 +51,7 @@ class AttentionLayer(nn.Module):
             self_attention_outputs.append(
                 self.attention(query=input_step, keys=keys_vector[:mask_index],
                                values=values_vector[:mask_index]))  # dims [bs, dims]
-        return tr.stack(self_attention_outputs, dim=0)
+        return tr.stack(self_attention_outputs, dim=0)  # dims [sl, bs, dims]
 
 
 class TransformerLayer(nn.Module):
@@ -62,8 +64,8 @@ class TransformerLayer(nn.Module):
         self.sublayers = nn.ModuleList([SubLayer(in_features=in_features), SubLayer(in_features=in_features)])
 
     def forward(self, input_tensor):
-        shape = input_tensor.size()
-        attention_output = self.sublayers[0](input_tensor, lambda x: self.attention(x, x, x))
+        shape = input_tensor.size()  # [sl, bs, hs]
+        attention_output = self.sublayers[0](input_tensor, lambda x: self.attention(x, x, x))  # dims [sl, bs, hs]
         ff_output = self.sublayers[1](attention_output.view(-1, self.dim), self.linear).view(shape)
         return ff_output
 
@@ -86,9 +88,18 @@ class TransformerLayerDecoder(TransformerLayer):
 
 class TransformerEncoder(nn.Module):
 
-    def __init__(self, num_layers, in_features, num_heads, ffnhid, p):
+    def __init__(self, num_layers, in_features, num_heads, ffnhid, p=0.1):
         super().__init__()
         ffnhid = get_list(ffnhid, num_layers)
-        self.layers = nn.ModuleList(
-            [TransformerLayer(in_features=in_features, ffnhid=ffnhid[i], p=p, num_heads=num_heads[i]) for i in
-             range(num_layers)])
+        num_heads = get_list(num_heads, num_layers)
+        layers = OrderedDict()
+        for i in range(num_layers):
+            layers["encoder_layer_{}".format(i)] = TransformerLayer(in_features=in_features, ffnhid=ffnhid[i], p=p,
+                                                                    num_heads=num_heads[i])
+        self.layers = nn.Sequential(layers)
+
+    def forward(self, input_tensors):
+        return self.layers(input_tensors)
+
+    # class TrasformerEncoderEmbedding(nn.Module):
+#     pass
