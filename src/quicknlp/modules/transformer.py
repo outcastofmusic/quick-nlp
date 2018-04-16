@@ -1,5 +1,3 @@
-from collections import OrderedDict
-
 import torch as tr
 import torch.nn as nn
 
@@ -7,7 +5,6 @@ from quicknlp.modules.embeddings import NormEmbeddings, PositionalEncoding
 from quicknlp.utils import get_list
 from .attention import MultiHeadAttention
 from .layer_norm import LayerNorm
-import torch
 
 
 class PositionFeedForward(nn.Module):
@@ -154,6 +151,7 @@ class TransformerDecoderEmbedding(TransformerDecoder):
             PositionalEncoding(in_features=in_features, dropout=dropout, max_len=max_len)
         )
 
-    def forward(self, input_tensors):
-        embeddings = self.embeddings(input_tensors)
-        return super().forward(embeddings)
+    def forward(self, *inputs):
+        encoder_inputs, decoder_inputs = inputs
+        embeddings = self.embeddings(decoder_inputs)
+        return super().forward(encoder_inputs, embeddings)
