@@ -26,7 +26,7 @@ def test_MPLPAttention(attention_setup):
     ed = keys.size(2)
     bs = query.size(0)
     in_features = keys.size(2) + query.size(1)
-    attention = to_gpu(MLPAttention(in_features=in_features, nhid=200))
+    attention = to_gpu(MLPAttention(n_in=in_features, nhid=200))
     result = attention(query=query, keys=keys, values=keys)
     assert (bs, ed) == result.shape
 
@@ -36,7 +36,7 @@ def test_SDPAttention(attention_setup):
     bs = query.size(0)
     ed = keys.size(2)
     eq = query.size(1)
-    attention = to_gpu(SDPAttention(in_features=ed))
+    attention = to_gpu(SDPAttention(n_in=ed))
     if ed != eq:
         with pytest.raises(RuntimeError):
             result = attention(query=query, keys=keys, values=keys)

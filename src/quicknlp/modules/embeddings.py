@@ -9,10 +9,10 @@ from fastai.rnn_reg import EmbeddingDropout, LockedDropout
 class NormEmbeddings(nn.Module):
     "Normalized embedding see http://nlp.seas.harvard.edu/2018/04/03/attention.html"
 
-    def __init__(self, in_features, vocab, padding_idx=None):
+    def __init__(self, in_dim, tokens, padding_idx=None):
         super().__init__()
-        self.embedding = nn.Embedding(vocab, in_features, padding_idx=padding_idx)
-        self.in_features = in_features
+        self.embedding = nn.Embedding(tokens, in_dim, padding_idx=padding_idx)
+        self.in_features = in_dim
 
     def forward(self, x):
         return self.embedding(x) * math.sqrt(self.in_features)
@@ -21,15 +21,15 @@ class NormEmbeddings(nn.Module):
 class PositionalEncoding(nn.Module):
     "Sinusoid Positional embedding see http://nlp.seas.harvard.edu/2018/04/03/attention.html"
 
-    def __init__(self, in_features, dropout, max_len=5000):
+    def __init__(self, in_dim, dropout, max_len=5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
         # Compute the positional encodings once in log space.
-        pe = torch.zeros(max_len, in_features)
+        pe = torch.zeros(max_len, in_dim)
         position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, in_features, 2) *
-                             -(math.log(10000.0) / in_features))
+        div_term = torch.exp(torch.arange(0, in_dim, 2) *
+                             -(math.log(10000.0) / in_dim))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
@@ -41,25 +41,26 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-class DropoutEmbedding(nn.Module):
+class DropoutEmbeddings(nn.Module):
     initrange = 0.1
 
-    def __init__(self, vocab, in_features, dropoute=0.1, dropouti=0.65, pad_token=None):
+    def __init__(self, ntokens, emb_size, dropoute=0.1, dropouti=0.65, pad_token=None):
         """ Default Constructor for the DropoutEmbeddingr class
 
         Args:
-            vocab (int): number of vocabulary (or tokens) in the source dataset
-            in_features (int): the embedding size to use to encode each token
+            ntokens (int): number of vocabulary (or tokens) in the source dataset
+            emb_size (int): the embedding size to use to encode each token
             pad_token (int): the int value used for padding text.
             dropoute (float): dropout to apply to the embedding layer.
             dropouti (float): dropout to apply to the input layer.
         """
-        super(DropoutEmbedding, self).__init__()
-        self.encoder = nn.Embedding(vocab, in_features, padding_idx=pad_token)
+        super().__init__()
+        self.encoder = nn.Embedding(ntokens, emb_size, padding_idx=pad_token)
         self.encoder_with_dropout = EmbeddingDropout(self.encoder)
         self.encoder.weight.data.uniform_(-self.initrange, self.initrange)
         self.dropout_embedding = dropoute
         self.dropout_input = LockedDropout(dropouti)
+        self.emb_size = emb_size
 
     def forward(self, input_tensor):
         emb = self.encoder_with_dropout(input_tensor, dropout=self.dropout_embedding if self.training else 0)

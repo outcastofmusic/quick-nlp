@@ -30,16 +30,16 @@ class Attention(nn.Module):
 class MLPAttention(Attention):
     """Multilayer Perceptron Attention Bandandau et al. 2015"""
 
-    def __init__(self, in_features, nhid):
+    def __init__(self, n_in, nhid):
         """
 
         Args:
-            in_features (int):  The input dims of the first linear layer. It should equal
+            n_in (int):  The input dims of the first linear layer. It should equal
                     the sum of the keys and query dims
             nhid (int): The dimension of the internal prediction.
         """
         super(MLPAttention, self).__init__()
-        self.linear1 = nn.Linear(in_features=in_features, out_features=nhid, bias=False)
+        self.linear1 = nn.Linear(in_features=n_in, out_features=nhid, bias=False)
         self.linear2 = nn.Linear(in_features=nhid, out_features=1, bias=False)
 
     def score(self, query, key):
@@ -50,9 +50,9 @@ class MLPAttention(Attention):
 class SDPAttention(Attention):
     """Scaled Dot Product Attention Vaswani et al. 2017"""
 
-    def __init__(self, in_features, p=0.0):
+    def __init__(self, n_in, p=0.0):
         super(SDPAttention, self).__init__(p=p)
-        self.scale = np.sqrt(in_features)
+        self.scale = np.sqrt(n_in)
 
     def score(self, query, key):
         return (query * key).sum(dim=-1).view(-1, 1) / self.scale

@@ -10,7 +10,9 @@ from quicknlp.utils import get_trainable_parameters
 params = [(True), (False)]
 ids = ["bidir", "unidir"]
 
-model_type = ["simple", "attention"]
+# model_type = ["simple", "attention"]
+
+model_type = ["simple"]
 
 
 @pytest.fixture(params=model_type)

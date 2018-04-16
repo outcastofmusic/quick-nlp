@@ -1,11 +1,9 @@
-from typing import Optional
-
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from fastai.core import V, to_gpu
 
 from quicknlp.utils import assert_dims
-from .rnn_encoder import EmbeddingRNNEncoder
 
 
 def repeat_cell_state(hidden, num_beams):
@@ -35,50 +33,47 @@ def select_hidden_by_index(hidden, indices):
     return results
 
 
-class EmbeddingRNNDecoder(EmbeddingRNNEncoder):
+class Decoder(nn.Module):
 
-    def __init__(self, ntoken: int, emb_sz: int, nhid: int, nlayers: int, pad_token: int, eos_token: int,
-                 max_tokens=10, embedding_layer: Optional[torch.nn.Module] = None, dropouth=0.3, dropouti=0.65,
-                 dropoute=0.1, wdrop=0.5, cell_type="lstm", **kwargs):
-        super(EmbeddingRNNDecoder, self).__init__(ntoken=ntoken, emb_sz=emb_sz, nhid=nhid, nlayers=nlayers,
-                                                  pad_token=pad_token,
-                                                  bidir=False,  # Decoder can't see into the future (yet!)
-                                                  dropouth=dropouth, dropouti=dropouti, dropoute=dropoute, wdrop=wdrop,
-                                                  cell_type=cell_type, **kwargs
-                                                  )
-        if embedding_layer is not None:
-            self.encoder.weight = embedding_layer.weight
-
-        self.projection_layer = None
+    def __init__(self, decoder_layer, projection_layer, max_tokens, eos_token, pad_token,
+                 embedding_layer: torch.nn.Module):
+        super(Decoder, self).__init__()
+        self.decoder_layer = decoder_layer
+        self.nlayers = decoder_layer.nlayers
+        self.projection_layer = projection_layer
+        self.bs = 1
         self.max_iterations = max_tokens
         self.eos_token = eos_token
         self.pad_token = pad_token
         self.beam_outputs = None
-        self.emb_sz = emb_sz
+        self.embedding_layer = embedding_layer
+        self.emb_size = embedding_layer.emb_size
 
-    def forward(self, inputs, num_beams=0, hidden=None):
-        self.hidden = self.hidden if hidden is None else hidden
+    def reset(self, bs):
+        self.decoder_layer.reset(bs)
+
+    def forward(self, inputs, hidden=None, num_beams=0):
         self.bs = inputs.size(1)
         if num_beams == 0:  # zero beams, a.k.a. teacher forcing
-            return self._train_forward(inputs)
+            return self._train_forward(inputs, hidden)
         elif num_beams == 1:  # one beam  a.k.a. greedy search
-            return self._greedy_forward(inputs)
+            return self._greedy_forward(inputs, hidden)
         elif num_beams > 1:  # multiple beams a.k.a topk search
-            return self._beam_forward(inputs, num_beams)
+            return self._beam_forward(inputs, hidden, num_beams)
 
-    def _beam_forward(self, inputs, num_beams):
-        self.hidden = repeat_cell_state(self.hidden, num_beams)
-        return self._topk_forward(inputs, num_beams)
+    def _beam_forward(self, inputs, hidden, num_beams):
+        return self._topk_forward(inputs, hidden, num_beams)
 
-    def _train_forward(self, inputs):
+    def _train_forward(self, inputs, hidden=None):
+        inputs = self.embedding_layer(inputs)
         # outputs are the outputs of every layer
-        raw_outputs, outputs = super(EmbeddingRNNDecoder, self).forward(inputs)
+        raw_outputs, outputs = self.decoder_layer(inputs, hidden)
         # we project only the output of the last layer
         if self.projection_layer is not None:
             outputs[-1] = self.projection_layer(outputs[-1])
         return raw_outputs, outputs
 
-    def _greedy_forward(self, inputs):
+    def _greedy_forward(self, inputs, hidden=None):
         inputs = inputs[:1]  # inputs should be only first token initially [1,bs]
         sl, bs = inputs.size()
         finished = to_gpu(torch.zeros(bs).byte())
@@ -88,7 +83,7 @@ class EmbeddingRNNDecoder(EmbeddingRNNEncoder):
         raw_layer_outputs = [[] for _ in range(self.nlayers)]
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
-            raw_output, output = self.forward(inputs, 0)
+            raw_output, output = self.forward(inputs, hidden=hidden, num_beams=0)
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
                 raw_layer_outputs[layer_index].append(raw_output[layer_index])
@@ -107,7 +102,7 @@ class EmbeddingRNNDecoder(EmbeddingRNNEncoder):
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         return raw_outputs, outputs
 
-    def _topk_forward(self, inputs, num_beams):
+    def _topk_forward(self, inputs, hidden, num_beams):
         sl, bs = inputs.size()
         # initial logprobs should be zero (pr of <sos> token in the start is 1)
         logprobs = torch.zeros_like(inputs[:1]).view(1, bs, 1).float()  # shape will be [sl, bs, 1]
@@ -117,9 +112,11 @@ class EmbeddingRNNDecoder(EmbeddingRNNEncoder):
         layer_outputs = [[] for _ in range(self.nlayers)]
         raw_layer_outputs = [[] for _ in range(self.nlayers)]
         self.beam_outputs = inputs.clone()
+        hidden = repeat_cell_state(hidden, num_beams)
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs * num_beams, layer_dim], ...] sl should be one
-            raw_output, output = self.forward(inputs, 0)
+            raw_output, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
                 raw_layer_outputs[layer_index].append(raw_output[layer_index])
@@ -152,7 +149,7 @@ class EmbeddingRNNDecoder(EmbeddingRNNEncoder):
             parents = beams / num_tokens
             inputs = beams % num_tokens
             parent_indices = reshape_parent_indices(parents.view(-1), bs=bs, num_beams=num_beams)
-            self.hidden = select_hidden_by_index(self.hidden, indices=parent_indices)
+            self.decoder_layer.hidden = select_hidden_by_index(self.decoder_layer.hidden, indices=parent_indices)
             finished = torch.index_select(finished, 0, parent_indices.data)
             inputs = inputs.view(1, -1).contiguous()
 
@@ -167,3 +164,15 @@ class EmbeddingRNNDecoder(EmbeddingRNNEncoder):
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         self.beam_outputs = self.beam_outputs.view(-1, bs, num_beams)
         return raw_outputs, outputs
+
+    @property
+    def hidden(self):
+        return self.decoder_layer.hidden
+
+    @hidden.setter
+    def hidden(self, value):
+        self.decoder_layer.hidden = value
+
+    @property
+    def layers(self):
+        return self.decoder_layer.layers

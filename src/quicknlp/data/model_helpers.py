@@ -1,9 +1,9 @@
 from itertools import chain
-from typing import Union, List, Dict
+from typing import Dict, List, Union
 
 import numpy as np
 import pandas as pd
-from fastai.core import VV, to_np, BasicModel
+from fastai.core import BasicModel, VV, to_np
 from torchtext.data import Field
 
 BeamTokens = List[str]
@@ -75,7 +75,7 @@ class EncoderDecoderModel(BasicModel):
         groups = [] if groups is None else groups
         if hasattr(layer, "encoder") and add_encoder:
             groups.append((layer.encoder, layer.dropouti))
-        groups.append(tuple([i for i in chain(*zip(layer.rnns, layer.dropouths))]))
+        groups.append(tuple([i for i in chain(*zip(layer.layers, layer.dropouths))]))
         if hasattr(layer, "projection_layer") and add_projection:
             groups.append((layer.projection_layer.dropout, layer.projection_layer.layers))
         return groups

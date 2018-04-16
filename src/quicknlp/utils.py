@@ -1,5 +1,5 @@
 from inspect import signature
-from typing import List, Tuple, Optional, Union, Sequence, Any, Callable
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -167,7 +167,7 @@ def get_kwarg(kwargs, name, default_value=None, remove=True):
         value = kwargs.pop(name) if name in kwargs else default_value
     else:
         value = kwargs.get(name, default_value)
-    return value, kwargs
+    return value
 
 
 def call_with_signature(callable_fn: Callable, *args, **kwargs):
