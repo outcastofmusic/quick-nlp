@@ -71,13 +71,22 @@ def predict_with_seq2seq(m, dl, num_beams=1):
 
 
 class EncoderDecoderModel(BasicModel):
-    def _layer_groups(self, layer, groups=None, add_encoder=True, add_projection=True):
+    def _layer_groups(self, layer, groups=None):
         groups = [] if groups is None else groups
-        if hasattr(layer, "encoder") and add_encoder:
-            groups.append((layer.encoder, layer.dropouti))
-        groups.append(tuple([i for i in chain(*zip(layer.layers, layer.dropouths))]))
-        if hasattr(layer, "projection_layer") and add_projection:
+        if hasattr(layer, "embedding_layer"):
+            embedding_layer = layer.embedding_layer
+            groups.append((embedding_layer.encoder, embedding_layer.dropout_input))
+        if hasattr(layer, "encoder_layer"):
+            encoder_layer = layer.encoder_layer
+            groups.append(tuple([i for i in chain(*zip(encoder_layer.layers, encoder_layer.dropouths))]))
+        if hasattr(layer, "decoder_layer"):
+            decoder_layer = layer.decoder_layer
+            groups.append(tuple([i for i in chain(*zip(decoder_layer.layers, decoder_layer.dropouths))]))
+        if hasattr(layer, "projection_layer"):
             groups.append((layer.projection_layer.dropout, layer.projection_layer.layers))
+        else:
+            if hasattr(layer, "layers") and hasattr(layer, "dropouths"):
+                groups.append(tuple([i for i in chain(*zip(layer.layers, layer.dropouths))]))
         return groups
 
 
@@ -91,4 +100,4 @@ class HREDModel(EncoderDecoderModel):
     def get_layer_groups(self, do_fc=False):
         groups = self._layer_groups(self.model.query_encoder)
         groups = self._layer_groups(self.model.session_encoder, groups)
-        return self._layer_groups(self.model.decoder, groups, add_encoder=False)
+        return self._layer_groups(self.model.decoder, groups)

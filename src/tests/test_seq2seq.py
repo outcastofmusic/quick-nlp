@@ -2,6 +2,7 @@ import pytest
 from fastai.core import V, to_gpu
 from torch.optim import Adam
 
+from quicknlp.data.model_helpers import S2SModel
 from quicknlp.data.s2s_model_data_loader import decoder_loss
 from quicknlp.models import Seq2Seq
 from quicknlp.models.seq2seq_attention import Seq2SeqAttention
@@ -48,3 +49,9 @@ def test_seq2seq_training_parameters(model, s2smodel):
     model_parameters = get_trainable_parameters(model)
     grad_flow_parameters = get_trainable_parameters(model, grad=True)
     assert set(model_parameters) == set(grad_flow_parameters)
+
+
+def test_seq2seq_encoder_decoder_model(model):
+    enc_dec_model = S2SModel(model)
+    groups = enc_dec_model.get_layer_groups()
+    assert len(groups) == 5

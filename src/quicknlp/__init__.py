@@ -1,2 +1,2 @@
-from .data import SpacyTokenizer, S2SModelData, DialogueAnalysis, HierarchicalModelData
+from .data import DialogueAnalysis, HierarchicalModelData, S2SModelData, SpacyTokenizer
 from .utils import print_batch
