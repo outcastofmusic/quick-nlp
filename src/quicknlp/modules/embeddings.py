@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn as nn
 from fastai.core import V
+from fastai.rnn_reg import EmbeddingDropout, LockedDropout
 
 
 class NormEmbeddings(nn.Module):
@@ -38,3 +39,32 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         x = x + V(self.pe[:, :x.size(1)])
         return self.dropout(x)
+
+
+class DropoutEmbedding(nn.Module):
+    initrange = 0.1
+
+    def __init__(self, vocab, in_features, dropoute=0.1, dropouti=0.65, pad_token=None):
+        """ Default Constructor for the DropoutEmbeddingr class
+
+        Args:
+            vocab (int): number of vocabulary (or tokens) in the source dataset
+            in_features (int): the embedding size to use to encode each token
+            pad_token (int): the int value used for padding text.
+            dropoute (float): dropout to apply to the embedding layer.
+            dropouti (float): dropout to apply to the input layer.
+        """
+        super(DropoutEmbedding, self).__init__()
+        self.encoder = nn.Embedding(vocab, in_features, padding_idx=pad_token)
+        self.encoder_with_dropout = EmbeddingDropout(self.encoder)
+        self.encoder.weight.data.uniform_(-self.initrange, self.initrange)
+        self.dropout_embedding = dropoute
+        self.dropout_input = LockedDropout(dropouti)
+
+    def forward(self, input_tensor):
+        emb = self.encoder_with_dropout(input_tensor, dropout=self.dropout_embedding if self.training else 0)
+        return self.dropout_input(emb)
+
+    @property
+    def weight(self):
+        return self.encoder.weight
