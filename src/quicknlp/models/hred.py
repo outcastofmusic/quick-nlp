@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastai.lm_rnn import repackage_var
 
-from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNEncoder
+from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNLayers
 from quicknlp.utils import assert_dims, get_kwarg, get_list
 
 HParam = Union[List[int], int]
@@ -61,23 +61,23 @@ class HRED(nn.Module):
                                                     dropouti=dropouti
                                                     )
 
-        encoder_rnn = RNNEncoder(in_dim=emb_sz[0],
-                                 out_dim=kwargs.get("out_dim", emb_sz[0]),
-                                 nhid=nhid[0], bidir=bidir,
-                                 dropouth=dropouth,
-                                 wdrop=wdrop,
-                                 nlayers=nlayers[0],
-                                 cell_type=self.cell_type,
-                                 )
+        encoder_rnn = RNNLayers(in_dim=emb_sz[0],
+                                out_dim=kwargs.get("out_dim", emb_sz[0]),
+                                nhid=nhid[0], bidir=bidir,
+                                dropouth=dropouth,
+                                wdrop=wdrop,
+                                nlayers=nlayers[0],
+                                cell_type=self.cell_type,
+                                )
         self.query_encoder = Encoder(
             embedding_layer=encoder_embedding_layer,
             encoder_layer=encoder_rnn
 
         )
-        self.session_encoder = RNNEncoder(in_dim=encoder_rnn.out_dim, nhid=nhid[1], out_dim=nhid[2], nlayers=1,
-                                          bidir=False,
-                                          cell_type=self.cell_type, wdrop=wdrop, dropouth=dropouth,
-                                          )
+        self.session_encoder = RNNLayers(in_dim=encoder_rnn.out_dim, nhid=nhid[1], out_dim=nhid[2], nlayers=1,
+                                         bidir=False,
+                                         cell_type=self.cell_type, wdrop=wdrop, dropouth=dropouth,
+                                         )
 
         if share_embedding_layer:
             decoder_embedding_layer = encoder_embedding_layer
@@ -88,9 +88,9 @@ class HRED(nn.Module):
                                                         dropouti=dropouti
                                                         )
 
-        decoder_rnn = RNNEncoder(in_dim=kwargs.get("in_dim", emb_sz[-1]), out_dim=kwargs.get("out_dim", emb_sz[-1]),
-                                 nhid=nhid[-1], bidir=False, dropouth=dropouth,
-                                 wdrop=wdrop, nlayers=nlayers[-1], cell_type=self.cell_type)
+        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]), out_dim=kwargs.get("out_dim", emb_sz[-1]),
+                                nhid=nhid[-1], bidir=False, dropouth=dropouth,
+                                wdrop=wdrop, nlayers=nlayers[-1], cell_type=self.cell_type)
 
         projection_layer = Projection(out_dim=ntoken[-1], in_dim=emb_sz[-1], dropout=dropoutd,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None

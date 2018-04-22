@@ -9,10 +9,10 @@ from fastai.rnn_reg import EmbeddingDropout, LockedDropout
 class NormEmbeddings(nn.Module):
     "Normalized embedding see http://nlp.seas.harvard.edu/2018/04/03/attention.html"
 
-    def __init__(self, in_dim, tokens, padding_idx=None):
+    def __init__(self, emb_size, tokens, padding_idx=None):
         super().__init__()
-        self.embedding = nn.Embedding(tokens, in_dim, padding_idx=padding_idx)
-        self.in_features = in_dim
+        self.embedding = nn.Embedding(tokens, emb_size, padding_idx=padding_idx)
+        self.in_features = emb_size
 
     def forward(self, x):
         return self.embedding(x) * math.sqrt(self.in_features)
@@ -69,3 +69,15 @@ class DropoutEmbeddings(nn.Module):
     @property
     def weight(self):
         return self.encoder.weight
+
+
+class TransformerEmbeddings(nn.Module):
+
+    def __init__(self, ntokens, emb_size, dropout, pad_token=None, max_len=5000):
+        super(TransformerEmbeddings, self).__init__()
+        self.layers = nn.Sequential(NormEmbeddings(emb_size=emb_size, tokens=ntokens, padding_idx=pad_token),
+                                    PositionalEncoding(in_dim=emb_size, dropout=dropout, max_len=max_len))
+        self.emb_size = emb_size
+
+    def forward(self, input_tensor):
+        return self.layers(input_tensor)

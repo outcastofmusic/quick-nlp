@@ -5,9 +5,9 @@ import pytest
 from fastai.core import T, V, to_gpu, to_np
 from numpy.testing import assert_allclose
 
-from quicknlp.modules import AttentionDecoder, AttentionProjection, Projection, RNNEncoder
-from quicknlp.modules.basic_decoder import Decoder, reshape_parent_indices, select_hidden_by_index
-from quicknlp.modules.embeddings import DropoutEmbeddings
+from quicknlp.modules import AttentionDecoder, AttentionProjection, Projection, RNNLayers, TransformerDecoderLayers
+from quicknlp.modules.basic_decoder import Decoder, TransformerDecoder, reshape_parent_indices, select_hidden_by_index
+from quicknlp.modules.embeddings import DropoutEmbeddings, TransformerEmbeddings
 from quicknlp.utils import assert_dims
 
 params_to_try = [
@@ -48,9 +48,9 @@ def rnn_decoder(decoder_params):
 
     if decoder_params.attention:
         # attention decoder must have double the in_dim to accommodate for the attention concat
-        decoder_rnn = RNNEncoder(in_dim=decoder_params.emb_size * 2, out_dim=decoder_params.emb_size,
-                                 nhid=decoder_params.nhid, bidir=False,
-                                 nlayers=decoder_params.nlayers, cell_type="gru")
+        decoder_rnn = RNNLayers(in_dim=decoder_params.emb_size * 2, out_dim=decoder_params.emb_size,
+                                nhid=decoder_params.nhid, bidir=False,
+                                nlayers=decoder_params.nlayers, cell_type="gru")
         projection_layer = AttentionProjection(out_dim=decoder_params.ntokens,
                                                in_dim=decoder_params.emb_size,
                                                att_nhid=decoder_params.att_hid,
@@ -63,9 +63,9 @@ def rnn_decoder(decoder_params):
 
     else:
 
-        decoder_rnn = RNNEncoder(in_dim=decoder_params.emb_size, out_dim=decoder_params.emb_size,
-                                 nhid=decoder_params.nhid, bidir=False,
-                                 nlayers=decoder_params.nlayers, cell_type="gru")
+        decoder_rnn = RNNLayers(in_dim=decoder_params.emb_size, out_dim=decoder_params.emb_size,
+                                nhid=decoder_params.nhid, bidir=False,
+                                nlayers=decoder_params.nlayers, cell_type="gru")
         projection_layer = Projection(out_dim=decoder_params.ntokens, in_dim=decoder_params.emb_size, dropout=0.0,
                                       tie_encoder=None
                                       )
@@ -128,24 +128,33 @@ def test_rnn_decoder(rnn_decoder, decoder_inputs):
         assert decoder.beam_outputs is None
 
 
-def test_decoder(decoder_params, decoder_inputs):
-    embedding = DropoutEmbeddings(ntokens=decoder_params.ntokens, emb_size=decoder_params.emb_size, pad_token=1,
-                                  dropouti=0.0, dropoute=0.0)
+@pytest.fixture()
+def decoder_inputs_transformer():
+    batch_size = 2
+    emb_size = 12
+    nlayers = 8
+    sl = 3
+    inputs = np.zeros(batch_size, dtype=np.int).reshape(1, batch_size)
+    enc_inputs = np.random.rand(nlayers, sl, batch_size, emb_size)
+    vin = V(T(inputs))
+    ven = V(T(enc_inputs))
+    return batch_size, emb_size, nlayers, sl, vin, ven
 
-    encoder = RNNEncoder(cell_type="gru", in_dim=decoder_params.emb_size,
-                         out_dim=decoder_params.emb_size,
-                         nhid=decoder_params.nhid,
-                         nlayers=decoder_params.nlayers)
 
-    projection_layer = Projection(out_dim=decoder_params.ntokens,
-                                  in_dim=decoder_params.emb_size, tie_encoder=None, dropout=0.0)
-    decoder = Decoder(decoder_layer=encoder, projection_layer=projection_layer, pad_token=1, eos_token=2,
-                      max_tokens=decoder_params.max_tokens,
-                      embedding_layer=embedding
-                      )
+@pytest.mark.parametrize("num_beams", [0, 1, 2], ids=["teacher_forcing", "greedy", "beam_search"])
+def test_transformer_decoder(num_beams, decoder_inputs_transformer):
+    batch_size, emb_size, nlayers, sl, vin, ven = decoder_inputs_transformer
+    ntokens, nhid, max_tokens = 10, 2, 20
+    embedding = TransformerEmbeddings(ntokens=ntokens, emb_size=emb_size,
+                                      dropout=0.0,
+                                      pad_token=1)
+
+    encoder = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size,
+                                       num_heads=2, ffnhid=nhid)
+    projection_layer = Projection(out_dim=ntokens,
+                                  in_dim=emb_size, tie_encoder=None, dropout=0.0)
+    decoder = TransformerDecoder(decoder_layer=encoder, projection_layer=projection_layer, pad_token=1, eos_token=2,
+                                 max_tokens=max_tokens,
+                                 embedding_layer=embedding)
     decoder = to_gpu(decoder)
-    dec_ins, keys = decoder_inputs
-    encoder.reset(decoder_params.batch_size)
-    hidden = encoder.hidden
-    decoder.projection_layer.keys = keys
-    raw_outputs, outputs = decoder(dec_ins, hidden=hidden, num_beams=decoder_params.num_beams)
+    raw_outputs, outputs = decoder(vin, ven, num_beams=num_beams)

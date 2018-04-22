@@ -23,6 +23,8 @@ def reshape_parent_indices(indices, bs, num_beams):
 
 
 def select_hidden_by_index(hidden, indices):
+    if hidden is None:
+        return hidden
     results = []
     for row in hidden:
         if isinstance(row, (list, tuple)):
@@ -127,21 +129,7 @@ class Decoder(nn.Module):
             num_tokens = new_logprobs.size(2)
             new_logprobs = new_logprobs.view(1, bs, num_beams, num_tokens) + logprobs.unsqueeze(-1)  # [1, bs, nb, nt]
             # only the first beam is considered in the first step, otherwise we would get the same result for every beam
-            if iteration == 0:
-                new_logprobs = new_logprobs[..., 0, :]
-            else:
-                # we have to cater for finished beams as well
-                # create a mask [1, bs x nb, nt] with - inf everywhere
-                mask = torch.zeros_like(new_logprobs).fill_(-1E32).view(1, bs * num_beams, num_tokens)
-                f = V(finished.unsqueeze(0))
-                # set the pad_token position to the last logprob for the finished ones
-                mask[..., self.pad_token] = logprobs
-                # mask shape = [1, bs * nb (that are finished), nt]
-                mask = mask.masked_select(f.unsqueeze(-1)).view(1, -1, num_tokens)
-                # replace the rows of the finished ones with the mask
-                new_logprobs.masked_scatter_(f.view(1, bs, num_beams, 1), mask)
-                # flatten all beams with the tokens
-                new_logprobs = new_logprobs.view(1, bs, -1)
+            new_logprobs = self.mask_logprobs(bs, finished, iteration, logprobs, new_logprobs, num_beams, num_tokens)
 
             # TODO take into account sequence_length for
             # get the top logprobs and their indices
@@ -165,6 +153,25 @@ class Decoder(nn.Module):
         self.beam_outputs = self.beam_outputs.view(-1, bs, num_beams)
         return raw_outputs, outputs
 
+    def mask_logprobs(self, bs, finished, iteration, logprobs, new_logprobs, num_beams, num_tokens):
+        if iteration == 0:
+            # only the first beam is considered in the first step, otherwise we would get the same result for every beam
+            new_logprobs = new_logprobs[..., 0, :]
+        else:
+            # we have to cater for finished beams as well
+            # create a mask [1, bs x nb, nt] with - inf everywhere
+            mask = torch.zeros_like(new_logprobs).fill_(-1E32).view(1, bs * num_beams, num_tokens)
+            f = V(finished.unsqueeze(0))
+            # set the pad_token position to the last logprob for the finished ones
+            mask[..., self.pad_token] = logprobs
+            # mask shape = [1, bs * nb (that are finished), nt]
+            mask = mask.masked_select(f.unsqueeze(-1)).view(1, -1, num_tokens)
+            # replace the rows of the finished ones with the mask
+            new_logprobs.masked_scatter_(f.view(1, bs, num_beams, 1), mask)
+            # flatten all beams with the tokens
+            new_logprobs = new_logprobs.view(1, bs, -1)
+        return new_logprobs
+
     @property
     def hidden(self):
         return self.decoder_layer.hidden
@@ -176,3 +183,83 @@ class Decoder(nn.Module):
     @property
     def layers(self):
         return self.decoder_layer.layers
+
+
+class TransformerDecoder(Decoder):
+
+    def __init__(self, decoder_layer, projection_layer, max_tokens, eos_token, pad_token,
+                 embedding_layer: torch.nn.Module):
+        super().__init__(decoder_layer=decoder_layer, projection_layer=projection_layer, max_tokens=max_tokens,
+                         eos_token=eos_token, pad_token=pad_token, embedding_layer=embedding_layer)
+
+    def _greedy_forward(self, inputs, hidden=None):
+        inputs = inputs[:1]  # inputs should be only first token initially [1,bs]
+        sl, bs = inputs.size()
+        finished = to_gpu(torch.zeros(bs).byte())
+        iteration = 0
+        self.beam_outputs = inputs.clone()
+        layer_outputs = [[] for _ in range(self.nlayers)]
+        while not finished.all() and iteration < self.max_iterations:
+            # output should be List[[sl, bs, layer_dim], ...] sl should be one
+            _, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            for layer_index in range(self.nlayers):
+                layer_outputs[layer_index].append(output[layer_index])
+
+            # step_inputs have shape [1,bs]
+            _, step_inputs = output[-1][-1:].max(dim=-1)
+            iteration += 1
+            self.beam_outputs = assert_dims(torch.cat([self.beam_outputs, step_inputs], dim=0), [iteration + 1, bs])
+            new_finished = step_inputs.data == self.eos_token
+            inputs = torch.cat([inputs, step_inputs], dim=0)
+            assert_dims(inputs, [iteration + 1, bs])
+            finished = finished | new_finished
+
+        self.beam_outputs = self.beam_outputs.view(-1, bs, 1)
+        outputs = [torch.cat(i, dim=0) for i in layer_outputs]
+        return outputs, outputs
+
+    def _topk_forward(self, inputs, hidden, num_beams):
+        sl, bs = inputs.size()
+        # initial logprobs should be zero (pr of <sos> token in the start is 1)
+        logprobs = torch.zeros_like(inputs[:1]).view(1, bs, 1).float()  # shape will be [sl, bs, 1]
+        inputs = inputs[:1].repeat(1,
+                                   num_beams)  # inputs should be only first token initially [1,bs x num_beams]
+        finished = to_gpu(torch.zeros(bs * num_beams).byte())
+        iteration = 0
+        layer_outputs = [[] for _ in range(self.nlayers)]
+        self.beam_outputs = inputs.clone()
+        hidden = repeat_cell_state(hidden, num_beams)
+        while not finished.all() and iteration < self.max_iterations:
+            # output should be List[[sl, bs * num_beams, layer_dim], ...] sl should be one
+            _, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            for layer_index in range(self.nlayers):
+                layer_outputs[layer_index].append(output[layer_index])
+
+            # we take the output of the last layer with dims [1, bs, output_dim]
+            # and get the indices of th top k for every bs
+            new_logprobs = F.log_softmax(output[-1][-1:], dim=-1)  # [1, bs x num_beams, nt]
+            num_tokens = new_logprobs.size(2)
+            new_logprobs = new_logprobs.view(1, bs, num_beams, num_tokens) + logprobs.unsqueeze(-1)  # [1, bs, nb, nt]
+            # mask logprobs if they are finished or it's the first iteration
+            new_logprobs = self.mask_logprobs(bs, finished, iteration, logprobs, new_logprobs, num_beams, num_tokens)
+
+            # TODO take into account sequence_length for getting the top logprobs and their indices
+            logprobs, beams = torch.topk(new_logprobs, k=num_beams, dim=-1)  # [1, bs, num_beams]
+            parents = beams / num_tokens
+            step_inputs = beams % num_tokens
+            parent_indices = reshape_parent_indices(parents.view(-1), bs=bs, num_beams=num_beams)
+            finished = torch.index_select(finished, 0, parent_indices.data)
+            step_inputs = step_inputs.view(1, -1).contiguous()
+
+            self.beam_outputs = torch.index_select(self.beam_outputs, dim=1, index=parent_indices)
+            self.beam_outputs = torch.cat([self.beam_outputs, step_inputs], dim=0)
+            new_finished = (step_inputs.data == self.eos_token).view(-1)
+            inputs = torch.index_select(inputs, dim=1, index=parent_indices)
+            inputs = torch.cat([inputs, step_inputs], dim=0)
+            finished = finished | new_finished
+            iteration += 1
+
+        # ensure the outputs are a list of layers where each layer is [sl,bs,layerdim]
+        outputs = [torch.cat(i, dim=0) for i in layer_outputs]
+        self.beam_outputs = self.beam_outputs.view(-1, bs, num_beams)
+        return outputs, outputs

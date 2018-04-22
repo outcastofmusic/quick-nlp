@@ -1,7 +1,7 @@
 import numpy as np
 from fastai.core import T, V, to_gpu, to_np
 
-from quicknlp.modules import RNNEncoder
+from quicknlp.modules import RNNLayers
 from quicknlp.modules.embeddings import DropoutEmbeddings
 from quicknlp.modules.basic_encoder import Encoder
 
@@ -14,13 +14,13 @@ def test_BiRNNEncoder():
 
     embedding = DropoutEmbeddings(ntokens=ntoken, emb_size=emb_sz, pad_token=0,
                                   dropouti=0.0, dropoute=0.0)
-    rnn_layers = RNNEncoder(in_dim=emb_sz,
-                            nhid=nhid,
-                            nlayers=2,
-                            out_dim=emb_sz,
-                            dropouth=0.0,
-                            wdrop=0.0,
-                            )
+    rnn_layers = RNNLayers(in_dim=emb_sz,
+                           nhid=nhid,
+                           nlayers=2,
+                           out_dim=emb_sz,
+                           dropouth=0.0,
+                           wdrop=0.0,
+                           )
     encoder = Encoder(embedding_layer=embedding, encoder_layer=rnn_layers)
 
     encoder = to_gpu(encoder)

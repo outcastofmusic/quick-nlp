@@ -1,8 +1,7 @@
 import torch as tr
 import torch.nn as nn
 
-from quicknlp.modules.embeddings import NormEmbeddings, PositionalEncoding
-from quicknlp.utils import get_list
+from quicknlp.utils import assert_dims, get_list
 from .attention import MultiHeadAttention
 from .layer_norm import LayerNorm
 
@@ -77,15 +76,16 @@ class TransformerLayerDecoder(TransformerLayer):
         self.sublayers.append(SubLayer(in_dim=in_dim))
 
     def forward(self, *inputs):
-        encoder_input, decoder_input = inputs
+        encoder_input, decoder_input = assert_dims(inputs, [2, None, None, self.in_dim])
         shape = decoder_input.size()
         att_output = self.sublayers[0](decoder_input, lambda x: self.attention(x, x, x, mask=True))
         dec_att_output = self.sublayers[1](att_output, lambda x: self.attention(x, encoder_input, encoder_input))
         ff_output = self.sublayers[2](dec_att_output.view(-1, self.in_dim), self.linear).view(shape)
+        assert_dims(ff_output, [None, None, self.in_dim])
         return ff_output
 
 
-class TransformerEncoder(nn.Module):
+class TransformerEncoderLayers(nn.Module):
 
     def __init__(self, num_layers, in_dim, num_heads, ffnhid, dropout=0.1):
         super().__init__()
@@ -106,52 +106,25 @@ class TransformerEncoder(nn.Module):
         return inputs, output_tensors
 
 
-class TransformerEncoderEmbedding(TransformerEncoder):
-    def __init__(self, tokens, num_layers, in_dim, num_heads, ffnhid, dropout=0.1, padding_idx=None, max_len=5000):
-        super().__init__(num_layers=num_layers, in_dim=in_dim,
-                         num_heads=num_heads, ffnhid=ffnhid, dropout=dropout
-                         )
-        self.embeddings = nn.Sequential(
-            NormEmbeddings(in_dim=in_dim, tokens=tokens, padding_idx=padding_idx),
-            PositionalEncoding(in_dim=in_dim, dropout=dropout, max_len=max_len)
-        )
-
-    def forward(self, input_tensors):
-        embeddings = self.embeddings(input_tensors)
-        return super().forward(embeddings)
-
-
-class TransformerDecoder(nn.Module):
-    def __init__(self, num_layers, in_dim, num_heads, ffnhid, dropout=0.1):
+class TransformerDecoderLayers(nn.Module):
+    def __init__(self, nlayers, in_dim, num_heads, ffnhid, dropout=0.1):
         super().__init__()
-        ffnhid = get_list(ffnhid, num_layers)
-        num_heads = get_list(num_heads, num_layers)
-
+        self.nlayers = nlayers
+        ffnhid = get_list(ffnhid, nlayers)
+        num_heads = get_list(num_heads, nlayers)
+        self.hidden = None
+        self.in_dim = in_dim
         self.layers = nn.ModuleList(
             [TransformerLayerDecoder(in_dim=in_dim, ffnhid=ffnhid[i],
-                                     p=dropout, num_heads=num_heads[i]) for i in range(num_layers)])
+                                     p=dropout, num_heads=num_heads[i]) for i in range(nlayers)])
 
-    def forward(self, *inputs):
-        encoder_inputs, decoder_inputs = inputs
+    def forward(self, decoder_inputs, encoder_inputs):
         output_tensors = []
-        dec_inputs = decoder_inputs
+        sl, bs, in_dim = decoder_inputs.size()
+        dec_inputs = assert_dims(decoder_inputs, [sl, bs, self.in_dim])
+        encoder_inputs = assert_dims(encoder_inputs, [self.nlayers, None, None, self.in_dim])
         for enc_inputs, layer in zip(encoder_inputs, self.layers):
             dec_inputs = layer(enc_inputs, dec_inputs)
             output_tensors.append(dec_inputs)
-        return dec_inputs, output_tensors
-
-
-class TransformerDecoderEmbedding(TransformerDecoder):
-    def __init__(self, tokens, num_layers, in_dim, num_heads, ffnhid, dropout=0.1, padding_idx=None, max_len=5000):
-        super().__init__(num_layers=num_layers, in_dim=in_dim,
-                         num_heads=num_heads, ffnhid=ffnhid, dropout=dropout
-                         )
-        self.embeddings = nn.Sequential(
-            NormEmbeddings(in_dim=in_dim, tokens=tokens, padding_idx=padding_idx),
-            PositionalEncoding(in_dim=in_dim, dropout=dropout, max_len=max_len)
-        )
-
-    def forward(self, *inputs):
-        encoder_inputs, decoder_inputs = inputs
-        embeddings = self.embeddings(decoder_inputs)
-        return super().forward(encoder_inputs, embeddings)
+        assert_dims(output_tensors, [self.nlayers, sl, bs, self.in_dim])
+        return output_tensors, output_tensors

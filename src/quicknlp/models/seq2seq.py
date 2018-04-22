@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from quicknlp.modules import Projection, RNNEncoder, Decoder, Encoder
+from quicknlp.modules import Projection, RNNLayers, Decoder, Encoder
 from quicknlp.modules.embeddings import DropoutEmbeddings
 from quicknlp.utils import HParam, assert_dims, concat_bidir_state, get_kwarg, get_list
 
@@ -43,14 +43,14 @@ class Seq2Seq(nn.Module):
                                                     dropouti=dropouti
                                                     )
 
-        encoder_rnn = RNNEncoder(in_dim=emb_sz[0],
-                                 out_dim=kwargs.get("out_dim", emb_sz[0]),
-                                 nhid=nhid[0], bidir=bidir,
-                                 dropouth=dropouth,
-                                 wdrop=wdrop,
-                                 nlayers=nlayers[0],
-                                 cell_type=cell_type,
-                                 )
+        encoder_rnn = RNNLayers(in_dim=emb_sz[0],
+                                out_dim=kwargs.get("out_dim", emb_sz[0]),
+                                nhid=nhid[0], bidir=bidir,
+                                dropouth=dropouth,
+                                wdrop=wdrop,
+                                nlayers=nlayers[0],
+                                cell_type=cell_type,
+                                )
         self.encoder = Encoder(
             embedding_layer=encoder_embedding_layer,
             encoder_layer=encoder_rnn
@@ -65,9 +65,9 @@ class Seq2Seq(nn.Module):
                                                         dropouti=dropouti
                                                         )
 
-        decoder_rnn = RNNEncoder(in_dim=kwargs.get("in_dim", emb_sz[-1]), out_dim=kwargs.get("out_dim", emb_sz[-1]),
-                                 nhid=nhid[-1], bidir=False, dropouth=dropouth,
-                                 wdrop=wdrop, nlayers=nlayers[-1], cell_type=cell_type)
+        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]), out_dim=kwargs.get("out_dim", emb_sz[-1]),
+                                nhid=nhid[-1], bidir=False, dropouth=dropouth,
+                                wdrop=wdrop, nlayers=nlayers[-1], cell_type=cell_type)
 
         projection_layer = Projection(out_dim=ntoken[-1], in_dim=emb_sz[-1], dropout=dropoutd,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None

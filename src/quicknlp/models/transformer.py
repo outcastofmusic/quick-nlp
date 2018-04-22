@@ -1,29 +1,32 @@
 import torch.nn as nn
 
-from quicknlp.utils import get_list, concat_bidir_state, assert_dims, HParam
+from quicknlp.modules import Encoder, Projection, TransformerDecoder, TransformerDecoderLayers, TransformerEmbeddings, \
+    TransformerEncoderLayers
+from quicknlp.utils import assert_dims, get_kwarg, get_list
 
 
-def make_model(src_vocab, tgt_vocab, N=6,
-               d_model=512, d_ff=2048, h=8, dropout=0.1):
-    "Helper: Construct a model from hyperparameters."
-    c = copy.deepcopy
-    attn = MultiHeadedAttention(h, d_model)
-    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
-    position = PositionalEncoding(d_model, dropout)
-    model = EncoderDecoder(
-        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
-        Decoder(DecoderLayer(d_model, c(attn), c(attn),
-                             c(ff), dropout), N),
-        nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
-        nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
-        Generator(d_model, tgt_vocab))
+# def make_model(src_vocab, tgt_vocab, N=6,
+#                d_model=512, d_ff=2048, h=8, dropout=0.1):
+#     "Helper: Construct a model from hyperparameters."
+#     c = copy.deepcopy
+#     attn = MultiHeadedAttention(h, d_model)
+#     ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+#     position = PositionalEncoding(d_model, dropout)
+#     model = EncoderDecoder(
+#         Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
+#         Decoder(DecoderLayer(d_model, c(attn), c(attn),
+#                              c(ff), dropout), N),
+#         nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
+#         nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
+#         Generator(d_model, tgt_vocab))
+#
+#     # This was important from their code.
+#     # Initialize parameters with Glorot / fan_avg.
+#     for p in model.parameters():
+#         if p.dim() > 1:
+#             nn.init.xavier_uniform(p)
+#     return model
 
-    # This was important from their code.
-    # Initialize parameters with Glorot / fan_avg.
-    for p in model.parameters():
-        if p.dim() > 1:
-            nn.init.xavier_uniform(p)
-    return model
 
 class Transformer(nn.Module):
     """Transformer model based on https://arxiv.org/abs/1706.03762
@@ -31,61 +34,48 @@ class Transformer(nn.Module):
 
     """
 
-    def __init__(self, ntoken: HParam, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
-                 eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
-                 bidir: bool = False, **kwargs):
-        """
+    def __init__(self, ntokens, emb_size=512, nlayers=6, pad_token=None, eos_token=None, max_tokens=200,
+                 share_embedding_layer=False, tie_decoder=True, **kwargs):
+        super().__init__()
 
-        Args:
-            ntoken (Union[List[int],int]): Number of tokens for the encoder and the decoder
-            emb_sz (Union[List[int],int]): Embedding size for the encoder and decoder embeddings
-            nhid (Union[List[int],int]): Number of hidden dims for the encoder and the decoder
-            nlayers (Union[List[int],int]): Number of layers for the encoder and the decoder
-            pad_token (int): The  index of the token used for padding
-            eos_token (int): The index of the token used for eos
-            max_tokens (int): The maximum number of steps the decoder iterates before stopping
-            share_embedding_layer (bool): if True the decoder shares its input and output embeddings
-            tie_decoder (bool): if True the encoder and the decoder share their embeddings
-            bidir (bool): if True use a bidirectional encoder
-            **kwargs: Extra embeddings that will be passed to the encoder and the decoder
-        """
-        super(self).__init__()
-        # allow for the same or different parameters between encoder and decoder
-        ntoken, emb_sz, nhid, nlayers = get_list(ntoken, 2), get_list(emb_sz, 2), get_list(nhid, 2), get_list(nlayers,
-                                                                                                              2)
-        if "dropoutd" in kwargs:
-            dropoutd = kwargs.pop("dropoutd")
+        ntokens = get_list(ntokens, 2)
+
+        dropout = get_kwarg(kwargs, name="dropout", default_value=0.1)
+        num_heads = get_kwarg(kwargs, name="num_heads", default_value=8)
+        ffnhid = get_kwarg(kwargs, name="ffnhid", default_value=2048)
+
+        encoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[0], emb_size=emb_size, dropout=dropout,
+                                                        pad_token=pad_token)
+        encoder_layer = TransformerEncoderLayers(num_layers=nlayers, in_dim=emb_size, num_heads=num_heads,
+                                                 ffnhid=ffnhid)
+        self.encoder = Encoder(embedding_layer=encoder_embedding_layer, encoder_layer=encoder_layer)
+
+        if share_embedding_layer:
+            decoder_embedding_layer = encoder_embedding_layer
         else:
-            dropoutd = 0.5
-        self.encoder = EmbeddingRNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
-                                           pad_token=pad_token, bidir=bidir, **kwargs)
+            decoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[-1], emb_size=emb_size, dropout=dropout,
+                                                            pad_token=pad_token)
 
-        self.decoder = EmbeddingRNNDecoder(ntoken=ntoken[-1], emb_sz=emb_sz[-1], nhid=nhid[-1], nlayers=nlayers[-1],
-                                           pad_token=pad_token, eos_token=eos_token, max_tokens=max_tokens,
-                                           # Share the embedding layer between encoder and decoder
-                                           embedding_layer=self.encoder.encoder_with_dropout.embed if share_embedding_layer else None,
-                                           # potentially tie the output projection with the decoder embedding
-                                           **kwargs
-                                           )
-        enc = self.decoder.encoder if tie_decoder else None
-        self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=emb_sz[-1], dropout=dropoutd,
-                                                   tie_encoder=enc if tie_decoder else None
-                                                   )
-        self.nt = ntoken[-1]
+        decoder_layer = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size, num_heads=num_heads, ffnhid=ffnhid)
+        projection_layer = Projection(out_dim=ntokens[-1], in_dim=emb_size, dropout=dropout,
+                                      tie_encoder=decoder_embedding_layer if tie_decoder else None
+                                      )
+        self.decoder = TransformerDecoder(
+            decoder_layer=decoder_layer,
+            projection_layer=projection_layer,
+            embedding_layer=decoder_embedding_layer,
+            pad_token=pad_token,
+            eos_token=eos_token,
+            max_tokens=max_tokens,
+        )
+        self.nt = ntokens[-1]
+        # xavier uniform initialization
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform(p)
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
-        # reset the states for the new batch
-        bs = encoder_inputs.size(1)
-        self.encoder.reset(bs)
-        self.decoder.reset(bs)
-        raw_outpus, outputs = self.encoder(encoder_inputs)
-        state = concat_bidir_state(self.encoder.hidden)
-        raw_outputs_dec, outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
-        if num_beams == 0:
-            # use output of the projection module
-            predictions = assert_dims(outputs_dec[-1], [None, bs, self.nt])  # dims: [sl, bs, nt]
-        else:
-            # use argmax or beam search predictions
-            predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
-        return predictions, [*raw_outpus, *raw_outputs_dec], [*outputs, *outputs_dec]
+        encoder_outputs = self.encoder(encoder_inputs)
+        decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
+        return decoder_outputs

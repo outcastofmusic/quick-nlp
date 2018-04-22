@@ -13,14 +13,14 @@ def get_layer_dims(layer_index, total_layers, in_dim, out_dim, nhid, bidir):
     return input_size, output_size
 
 
-class RNNEncoder(nn.Module):
+class RNNLayers(nn.Module):
     """
     Wrote this class to allow for a multilayered RNN encoder. It is based the fastai RNN_Encoder class
     """
 
     def __init__(self, in_dim, out_dim, nhid, nlayers, dropouth=0.3, wdrop=0.5, bidir=False, cell_type="lstm",
                  **kwargs):
-        """ Default Constructor for the RNNEncoder class
+        """ Default Constructor for the RNNLayers class
 
         Args:
             in_dim (int): the dimension of the input vectors
@@ -31,7 +31,7 @@ class RNNEncoder(nn.Module):
             wdrop (float): dropout used for a LSTM's internal (or hidden) recurrent weights.
             cell_type (str): Type of cell (default is LSTM)
         """
-        super(RNNEncoder, self).__init__()
+        super().__init__()
         self.layers = []
         for layer_index in range(nlayers):
             input_size, output_size = get_layer_dims(layer_index=layer_index, total_layers=nlayers,

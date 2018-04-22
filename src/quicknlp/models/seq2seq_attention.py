@@ -1,4 +1,4 @@
-from quicknlp.modules import AttentionDecoder, AttentionProjection, Encoder, RNNEncoder
+from quicknlp.modules import AttentionDecoder, AttentionProjection, Encoder, RNNLayers
 from quicknlp.modules.embeddings import DropoutEmbeddings
 from quicknlp.utils import HParam, assert_dims, get_kwarg
 from .seq2seq import Seq2Seq, get_list
@@ -41,14 +41,14 @@ class Seq2SeqAttention(Seq2Seq):
                                                     dropouti=dropouti
                                                     )
 
-        encoder_rnn = RNNEncoder(in_dim=emb_sz[0],
-                                 out_dim=kwargs.get("out_dim", emb_sz[0]),
-                                 nhid=nhid[0], bidir=bidir,
-                                 dropouth=dropouth,
-                                 wdrop=wdrop,
-                                 nlayers=nlayers[0],
-                                 cell_type=cell_type,
-                                 )
+        encoder_rnn = RNNLayers(in_dim=emb_sz[0],
+                                out_dim=kwargs.get("out_dim", emb_sz[0]),
+                                nhid=nhid[0], bidir=bidir,
+                                dropouth=dropouth,
+                                wdrop=wdrop,
+                                nlayers=nlayers[0],
+                                cell_type=cell_type,
+                                )
         self.encoder = Encoder(
             embedding_layer=encoder_embedding_layer,
             encoder_layer=encoder_rnn
@@ -63,9 +63,9 @@ class Seq2SeqAttention(Seq2Seq):
                                                         dropouti=dropouti
                                                         )
 
-        decoder_rnn = RNNEncoder(in_dim=kwargs.get("in_dim", emb_sz[-1] * 2), out_dim=kwargs.get("out_dim", emb_sz[-1]),
-                                 nhid=nhid[-1], bidir=False, dropouth=dropouth,
-                                 wdrop=wdrop, nlayers=nlayers[-1], cell_type=cell_type)
+        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1] * 2), out_dim=kwargs.get("out_dim", emb_sz[-1]),
+                                nhid=nhid[-1], bidir=False, dropouth=dropouth,
+                                wdrop=wdrop, nlayers=nlayers[-1], cell_type=cell_type)
 
         projection_layer = AttentionProjection(out_dim=ntoken[-1],
                                                in_dim=emb_sz[-1],
