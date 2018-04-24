@@ -1,8 +1,5 @@
 from torch import nn as nn
 
-__author__ = "Agis Oikonomou"
-__copyright__ = "Copyright 2018, True Ai"
-
 
 class Encoder(nn.Module):
 
