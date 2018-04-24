@@ -5,29 +5,6 @@ from quicknlp.modules import Encoder, Projection, TransformerDecoder, Transforme
 from quicknlp.utils import assert_dims, get_kwarg, get_list
 
 
-# def make_model(src_vocab, tgt_vocab, N=6,
-#                d_model=512, d_ff=2048, h=8, dropout=0.1):
-#     "Helper: Construct a model from hyperparameters."
-#     c = copy.deepcopy
-#     attn = MultiHeadedAttention(h, d_model)
-#     ff = PositionwiseFeedForward(d_model, d_ff, dropout)
-#     position = PositionalEncoding(d_model, dropout)
-#     model = EncoderDecoder(
-#         Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
-#         Decoder(DecoderLayer(d_model, c(attn), c(attn),
-#                              c(ff), dropout), N),
-#         nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
-#         nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
-#         Generator(d_model, tgt_vocab))
-#
-#     # This was important from their code.
-#     # Initialize parameters with Glorot / fan_avg.
-#     for p in model.parameters():
-#         if p.dim() > 1:
-#             nn.init.xavier_uniform(p)
-#     return model
-
-
 class Transformer(nn.Module):
     """Transformer model based on https://arxiv.org/abs/1706.03762
         code implementation heavily inspired by http://nlp.seas.harvard.edu/2018/04/03/attention.html
@@ -75,7 +52,15 @@ class Transformer(nn.Module):
                 nn.init.xavier_uniform(p)
 
     def forward(self, *inputs, num_beams=0):
+
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
-        encoder_outputs = self.encoder(encoder_inputs)
-        decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
-        return decoder_outputs
+        sl, bs = encoder_inputs.size()
+        _, encoder_outputs = self.encoder(encoder_inputs)
+        _, decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
+        if num_beams == 0:
+            # use output of the projection module
+            predictions = assert_dims(decoder_outputs[-1], [None, bs, self.nt])  # dims: [sl, bs, nt]
+        else:
+            # use argmax or beam search predictions
+            predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
+        return predictions, decoder_outputs, decoder_outputs

@@ -67,7 +67,7 @@ class MultiHeadAttention(Attention):
         self.out_dim = self.nhid * num_heads
         self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.out_dim, bias=False)
         self.query_linear = nn.Linear(in_features=query_dim, out_features=self.out_dim, bias=False)
-        self.values_dim = nn.Linear(in_features=values_dim, out_features=self.out_dim, bias=False)
+        self.values_linear = nn.Linear(in_features=values_dim, out_features=self.out_dim, bias=False)
         self.attention = SDPAttention(self.nhid, p=p)
         self.linear = nn.Linear(in_features=self.out_dim, out_features=self.out_dim, bias=False)
 
@@ -82,14 +82,14 @@ class MultiHeadAttention(Attention):
         # [sl, bs, dimH *NH]
         keys_projection = self.keys_linear(keys.view(-1, keys.size(-1))).view(sl, bs, -1)
         # [sl, bs, dimH *NH]
-        values_projection = self.keys_linear(values.view(-1, values.size(-1))).view(sl, bs, -1)
+        values_projection = self.values_linear(values.view(-1, values.size(-1))).view(sl, bs, -1)
         # split the heads and calculate the attentions
         query_heads = tr.split(query_projection, split_size=self.nhid, dim=-1)
         key_heads = tr.split(keys_projection, split_size=self.nhid, dim=-1)
         value_heads = tr.split(values_projection, split_size=self.nhid, dim=-1)
         heads = []
         for q, k, v in zip(query_heads, key_heads, value_heads):
-            heads.append(self.attention.forward(q, k, v))
+            heads.append(self.attention(q, k, v))
         outputs = tr.cat(heads, dim=-1)
         assert_dims(outputs, [bs, self.out_dim])
         return self.linear(outputs)

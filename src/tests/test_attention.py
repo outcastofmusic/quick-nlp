@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
-from fastai.core import V, T, to_gpu
+from fastai.core import T, V, to_gpu
 
-from quicknlp.modules.attention import MLPAttention, SDPAttention, MultiHeadAttention
+from quicknlp.modules.attention import MLPAttention, MultiHeadAttention, SDPAttention
 from quicknlp.utils import assert_dims
 
 params = [(300, 300), (300, 600)]
@@ -53,7 +53,7 @@ def test_MultiHeadAttention(attention_setup):
     num_heads = 4
     nhid = 10
     attention = to_gpu(
-        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ed, query_dim=eq, values_dim=eq, p=0.3))
+        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ed, query_dim=eq, values_dim=ed, p=0.3))
 
     result = attention(query=V(query), keys=V(keys), values=V(keys))
     assert_dims(result, [bs, num_heads * nhid])

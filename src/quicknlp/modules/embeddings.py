@@ -17,6 +17,10 @@ class NormEmbeddings(nn.Module):
     def forward(self, x):
         return self.embedding(x) * math.sqrt(self.in_features)
 
+    @property
+    def weight(self):
+        return self.embedding.weight
+
 
 class PositionalEncoding(nn.Module):
     "Sinusoid Positional embedding see http://nlp.seas.harvard.edu/2018/04/03/attention.html"
@@ -81,3 +85,7 @@ class TransformerEmbeddings(nn.Module):
 
     def forward(self, input_tensor):
         return self.layers(input_tensor)
+
+    @property
+    def weight(self):
+        return self.layers[0].weight

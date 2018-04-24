@@ -68,23 +68,6 @@ class TransformerLayer(nn.Module):
         return ff_output
 
 
-class TransformerLayerDecoder(TransformerLayer):
-
-    def __init__(self, in_dim, num_heads, ffnhid, p=0.1):
-        super().__init__(in_dim=in_dim, num_heads=num_heads, ffnhid=ffnhid, p=p)
-        self.decoder_attention = AttentionLayer(in_dim=in_dim, num_heads=num_heads, p=p)
-        self.sublayers.append(SubLayer(in_dim=in_dim))
-
-    def forward(self, *inputs):
-        encoder_input, decoder_input = assert_dims(inputs, [2, None, None, self.in_dim])
-        shape = decoder_input.size()
-        att_output = self.sublayers[0](decoder_input, lambda x: self.attention(x, x, x, mask=True))
-        dec_att_output = self.sublayers[1](att_output, lambda x: self.attention(x, encoder_input, encoder_input))
-        ff_output = self.sublayers[2](dec_att_output.view(-1, self.in_dim), self.linear).view(shape)
-        assert_dims(ff_output, [None, None, self.in_dim])
-        return ff_output
-
-
 class TransformerEncoderLayers(nn.Module):
 
     def __init__(self, num_layers, in_dim, num_heads, ffnhid, dropout=0.1):
@@ -96,14 +79,30 @@ class TransformerEncoderLayers(nn.Module):
             [TransformerLayer(in_dim=in_dim, ffnhid=ffnhid[i], p=dropout, num_heads=num_heads[i]) for i in
              range(num_layers)])
 
-    def forward(self, input_tensors):
+    def forward(self, *input_tensors):
         output_tensors = []
-        inputs = input_tensors
+        inputs, *_ = input_tensors
         for layer in self.layers:
             inputs = layer(inputs)
             output_tensors.append(inputs)
 
         return inputs, output_tensors
+
+
+class TransformerLayerDecoder(TransformerLayer):
+
+    def __init__(self, in_dim, num_heads, ffnhid, p=0.1):
+        super().__init__(in_dim=in_dim, num_heads=num_heads, ffnhid=ffnhid, p=p)
+        self.decoder_attention = AttentionLayer(in_dim=in_dim, num_heads=num_heads, p=p)
+        self.sublayers.append(SubLayer(in_dim=in_dim))
+
+    def forward(self, *inputs):
+        encoder_input, decoder_input = assert_dims(inputs, [2, None, None, self.in_dim])
+        shape = decoder_input.size()
+        att_output = self.sublayers[0](decoder_input, lambda x: self.attention(x, x, x, mask=True))
+        dec_att_output = self.sublayers[1](att_output, lambda x: self.decoder_attention(x, encoder_input, encoder_input))
+        ff_output = self.sublayers[2](dec_att_output.view(-1, self.in_dim), self.linear).view(shape)
+        return ff_output
 
 
 class TransformerDecoderLayers(nn.Module):

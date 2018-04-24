@@ -83,7 +83,11 @@ class EncoderDecoderModel(BasicModel):
             decoder_layer = layer.decoder_layer
             groups.append(tuple([i for i in chain(*zip(decoder_layer.layers, decoder_layer.dropouths))]))
         if hasattr(layer, "projection_layer"):
-            groups.append((layer.projection_layer.dropout, layer.projection_layer.layers))
+            proj_layer = layer.projection_layer
+            if hasattr(proj_layer, "layers"):
+                groups.append((proj_layer.dropout, proj_layer.layers))
+            elif hasattr(proj_layer, "attention"):
+                groups.append((proj_layer.attention, proj_layer.projection1, proj_layer.projection2))
         else:
             if hasattr(layer, "layers") and hasattr(layer, "dropouths"):
                 groups.append(tuple([i for i in chain(*zip(layer.layers, layer.dropouths))]))

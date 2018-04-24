@@ -150,7 +150,7 @@ def test_transformer_decoder(num_beams, decoder_inputs_transformer):
                                       pad_token=1)
 
     encoder = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size,
-                                       num_heads=2, ffnhid=nhid)
+                                       num_heads=2, ffnhid=emb_size)
     projection_layer = Projection(out_dim=ntokens,
                                   in_dim=emb_size, tie_encoder=None, dropout=0.0)
     decoder = TransformerDecoder(decoder_layer=encoder, projection_layer=projection_layer, pad_token=1, eos_token=2,
@@ -158,3 +158,14 @@ def test_transformer_decoder(num_beams, decoder_inputs_transformer):
                                  embedding_layer=embedding)
     decoder = to_gpu(decoder)
     raw_outputs, outputs = decoder(vin, ven, num_beams=num_beams)
+    if num_beams > 0:
+        assert_dims(outputs,
+                    [nlayers, None, num_beams * batch_size, (emb_size, ntokens)])
+        # actual beam outputs can be found in beam_outputs
+        assert decoder.beam_outputs is not None
+        assert_dims(decoder.beam_outputs, [None, batch_size, num_beams])
+        # the sl can go up to max_tokens + 1(for the extra 0 token at the end)
+        assert 0 < decoder.beam_outputs.shape[0] <= max_tokens + 1
+    else:
+        assert_dims(outputs, [nlayers, None, batch_size, (emb_size, ntokens)])
+        assert decoder.beam_outputs is None
