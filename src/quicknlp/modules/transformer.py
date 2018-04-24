@@ -100,7 +100,8 @@ class TransformerLayerDecoder(TransformerLayer):
         encoder_input, decoder_input = assert_dims(inputs, [2, None, None, self.in_dim])
         shape = decoder_input.size()
         att_output = self.sublayers[0](decoder_input, lambda x: self.attention(x, x, x, mask=True))
-        dec_att_output = self.sublayers[1](att_output, lambda x: self.decoder_attention(x, encoder_input, encoder_input))
+        dec_att_output = self.sublayers[1](att_output,
+                                           lambda x: self.decoder_attention(x, encoder_input, encoder_input))
         ff_output = self.sublayers[2](dec_att_output.view(-1, self.in_dim), self.linear).view(shape)
         return ff_output
 
