@@ -2,7 +2,7 @@ from functools import partial
 from typing import Callable, List, Optional
 
 import pandas as pd
-from fastai.core import SingleModel, to_gpu
+from fastai.core import to_gpu
 from fastai.dataset import ModelData
 from fastai.learner import Learner, load_model, save_model
 from torch import optim
@@ -10,10 +10,21 @@ from torch.nn import functional as F
 from torchtext.data import Dataset, Field
 
 from quicknlp.data.data_loaders import S2SDataLoader
-from quicknlp.models import Seq2Seq
-from quicknlp.models.seq2seq_attention import Seq2SeqAttention
+from quicknlp.models import Seq2Seq, Seq2SeqAttention, Transformer
 from .datasets import NamedField, TabularDatasetFromDataFrame, TabularDatasetFromFiles
-from .model_helpers import PrintingMixin, check_columns_in_df, predict_with_seq2seq
+from .model_helpers import PrintingMixin, S2SModel, check_columns_in_df, predict_with_seq2seq
+
+
+def decoder_loss(input, target, pad_idx, *args, **kwargs):
+    vocab = input.size(-1)
+    # dims are sq-1 times bs times vocab
+    input = input[:target.size(0)].view(-1, vocab).contiguous()
+    # targets are sq-1 times bs (one label for every word)
+    target = target.view(-1).contiguous()
+    return F.cross_entropy(input=input,
+                           target=target,
+                           ignore_index=pad_idx,
+                           *args, **kwargs)
 
 
 class EncoderDecoderLearner(Learner):
@@ -186,46 +197,55 @@ class S2SModelData(ModelData, PrintingMixin):
                    trn_ds=trn_ds, val_ds=val_ds, test_ds=test_ds, bs=bs, sort_key=sort_key, **kwargs)
 
     def to_model(self, m, opt_fn):
-        model = SingleModel(to_gpu(m))
+        model = S2SModel(to_gpu(m))
         return EncoderDecoderLearner(self, model, opt_fn=opt_fn)
 
-    def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, attention=True, att_nhid=512,
-                  **kwargs):
+    def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, **kwargs):
         if opt_fn is None:
             opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
-        if attention:
-            m = Seq2SeqAttention(
-                ntoken=[self.nt[name] for name in self.trn_dl.source_names],
-                emb_sz=emb_sz,
-                nhid=nhid,
-                nlayers=nlayers,
-                pad_token=self.pad_idx,
-                eos_token=self.eos_idx,
-                max_tokens=max_tokens,
-                att_nhid=att_nhid,
-                **kwargs
-            )
-        else:
-            m = Seq2Seq(
-                ntoken=[self.nt[name] for name in self.trn_dl.source_names],
-                emb_sz=emb_sz,
-                nhid=nhid,
-                nlayers=nlayers,
-                pad_token=self.pad_idx,
-                eos_token=self.eos_idx,
-                max_tokens=max_tokens,
-                **kwargs
-            )
+        m = Seq2Seq(
+            ntoken=[self.nt[name] for name in self.trn_dl.source_names],
+            emb_sz=emb_sz,
+            nhid=nhid,
+            nlayers=nlayers,
+            pad_token=self.pad_idx,
+            eos_token=self.eos_idx,
+            max_tokens=max_tokens,
+            **kwargs
+        )
         return self.to_model(m, opt_fn)
 
 
-def decoder_loss(input, target, pad_idx, *args, **kwargs):
-    vocab = input.size(-1)
-    # dims are sq-1 times bs times vocab
-    input = input[:target.size(0)].view(-1, vocab).contiguous()
-    # targets are sq-1 times bs (one label for every word)
-    target = target.view(-1).contiguous()
-    return F.cross_entropy(input=input,
-                           target=target,
-                           ignore_index=pad_idx,
-                           *args, **kwargs)
+class S2SAttentionModelData(S2SModelData):
+    def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, att_nhid=512,
+                  **kwargs):
+        if opt_fn is None:
+            opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+        m = Seq2SeqAttention(
+            ntoken=[self.nt[name] for name in self.trn_dl.source_names],
+            emb_sz=emb_sz,
+            nhid=nhid,
+            nlayers=nlayers,
+            pad_token=self.pad_idx,
+            eos_token=self.eos_idx,
+            max_tokens=max_tokens,
+            att_nhid=att_nhid,
+            **kwargs
+        )
+        return self.to_model(m, opt_fn)
+
+
+class TransformerModelData(S2SModelData):
+    def get_model(self, opt_fn=None, emb_sz=300, nlayers=2, max_tokens=100, **kwargs):
+        if opt_fn is None:
+            opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+        m = Transformer(
+            ntoken=[self.nt[name] for name in self.trn_dl.source_names],
+            emb_sz=emb_sz,
+            nlayers=nlayers,
+            pad_token=self.pad_idx,
+            eos_token=self.eos_idx,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        return self.to_model(m, opt_fn)

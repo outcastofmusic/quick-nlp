@@ -1,12 +1,12 @@
 import io
 import os
+import pickle
 from glob import glob
-from typing import List, Tuple, Optional, Union, Iterator
+from pathlib import Path
+from typing import Iterator, List, Optional, Tuple, Union
 
 import pandas as pd
 from torchtext.data import Dataset, Example, Field
-from pathlib import Path
-import pickle
 from tqdm import tqdm
 
 NamedField = Tuple[str, Field]
