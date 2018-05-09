@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastai.lm_rnn import repackage_var
 
-from quicknlp.modules import EmbeddingRNNEncoder, RNNEncoder, EmbeddingRNNDecoder, Projection
-from quicknlp.utils import get_list, assert_dims, get_kwarg
+from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNLayers
+from quicknlp.utils import assert_dims, get_kwarg, get_list
 
 HParam = Union[List[int], int]
 
@@ -47,29 +47,63 @@ class HRED(nn.Module):
         super().__init__()
         # allow for the same or different parameters between encoder and decoder
         ntoken, emb_sz, nhid, nlayers = get_list(ntoken), get_list(emb_sz, 2), get_list(nhid, 3), get_list(nlayers, 3)
-        dropoutd, kwargs = get_kwarg(kwargs, name="dropoutd", default_value=0.5)
+        dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)
+        dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)
+        dropoute = get_kwarg(kwargs, name="dropout_e", default_value=0.1)
+        dropouti = get_kwarg(kwargs, name="dropout_i", default_value=0.65)
+        dropouth = get_kwarg(kwargs, name="dropout_h", default_value=0.3)
+        wdrop = get_kwarg(kwargs, name="wdrop", default_value=0.5)
         self.cell_type = "gru"
-        self.query_encoder = EmbeddingRNNEncoder(ntoken=ntoken[0], emb_sz=emb_sz[0], nhid=nhid[0], nlayers=nlayers[0],
-                                                 pad_token=pad_token, bidir=bidir, out_dim=nhid[0],
-                                                 cell_type=self.cell_type, **kwargs)
 
-        self.session_encoder = RNNEncoder(in_dim=nhid[0], nhid=nhid[1], out_dim=nhid[2], nlayers=1, bidir=False,
-                                          cell_type=self.cell_type, **kwargs)
+        encoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[0],
+                                                    emb_size=emb_sz[0],
+                                                    dropoute=dropoute,
+                                                    dropouti=dropouti
+                                                    )
 
-        self.decoder = EmbeddingRNNDecoder(ntoken=ntoken[-1], emb_sz=emb_sz[-1], nhid=nhid[-1], nlayers=nlayers[-1],
-                                           pad_token=pad_token, eos_token=eos_token, max_tokens=max_tokens,
-                                           # Share the embedding layer between encoder and decoder
-                                           embedding_layer=self.query_encoder.encoder_with_dropout.embed if share_embedding_layer else None,
-                                           # potentially tie the output projection with the decoder embedding
-                                           cell_type=self.cell_type,
-                                           out_dim=nhid[-1],
-                                           **kwargs
-                                           )
-        enc = self.decoder.encoder if tie_decoder else None
-        self.decoder.projection_layer = Projection(n_out=ntoken[-1], n_in=nhid[-1], nhid=emb_sz[-1], dropout=dropoutd,
-                                                   tie_encoder=enc if tie_decoder else None
-                                                   )
-        self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=self.decoder.rnns[0].output_size)
+        encoder_rnn = RNNLayers(in_dim=emb_sz[0],
+                                out_dim=kwargs.get("out_dim", emb_sz[0]),
+                                nhid=nhid[0], bidir=bidir,
+                                dropouth=dropouth,
+                                wdrop=wdrop,
+                                nlayers=nlayers[0],
+                                cell_type=self.cell_type,
+                                )
+        self.query_encoder = Encoder(
+            embedding_layer=encoder_embedding_layer,
+            encoder_layer=encoder_rnn
+
+        )
+        self.session_encoder = RNNLayers(in_dim=encoder_rnn.out_dim, nhid=nhid[1], out_dim=nhid[2], nlayers=1,
+                                         bidir=False,
+                                         cell_type=self.cell_type, wdrop=wdrop, dropouth=dropouth,
+                                         )
+
+        if share_embedding_layer:
+            decoder_embedding_layer = encoder_embedding_layer
+        else:
+            decoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[-1],
+                                                        emb_size=emb_sz[-1],
+                                                        dropoute=dropoute,
+                                                        dropouti=dropouti
+                                                        )
+
+        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]), out_dim=kwargs.get("out_dim", emb_sz[-1]),
+                                nhid=nhid[-1], bidir=False, dropouth=dropouth,
+                                wdrop=wdrop, nlayers=nlayers[-1], cell_type=self.cell_type)
+
+        projection_layer = Projection(out_dim=ntoken[-1], in_dim=emb_sz[-1], dropout=dropoutd,
+                                      tie_encoder=decoder_embedding_layer if tie_decoder else None
+                                      )
+        self.decoder = Decoder(
+            decoder_layer=decoder_rnn,
+            projection_layer=projection_layer,
+            embedding_layer=decoder_embedding_layer,
+            pad_token=pad_token,
+            eos_token=eos_token,
+            max_tokens=max_tokens,
+        )
+        self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=self.decoder.layers[0].output_size)
         self.nt = ntoken[-1]
 
     def create_decoder_state(self, session_outputs):

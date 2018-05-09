@@ -1,12 +1,14 @@
 import io
+import json
 import os
+import pickle
 from glob import glob
-from typing import List, Tuple, Optional, Union, Iterator
+from operator import itemgetter
+from pathlib import Path
+from typing import Iterator, List, Optional, Tuple, Union
 
 import pandas as pd
 from torchtext.data import Dataset, Example, Field
-from pathlib import Path
-import pickle
 from tqdm import tqdm
 
 NamedField = Tuple[str, Field]
@@ -98,6 +100,39 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
                     yield example
 
 
+def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]], utterance_key: str, role_key: str,
+                              text_key: str, sort_key: str, max_sl=1000) -> Iterator[Example]:
+    """Load dialogues from json files
+    a json file should have a List of Dicts, see examples:
+     [{batch_col:chat_id, utterance_col:[{text_col:message, role_col:role, sort_col:timestamp}]}]
+
+    """
+    for file_index, file in enumerate(path_dir.glob("*.json")):
+        with file.open('r', encoding='utf-8') as fh:
+            dialogues = json.load(fh)
+        for dialogue in tqdm(dialogues, desc=f'processed file {file}'):
+            if isinstance(sort_key, str):
+                key = itemgetter(sort_key)
+            elif callable(sort_key):
+                key = sort_key
+            conversation = sorted(dialogue[utterance_key], key=key)
+            text = ""
+            roles = ""
+            lengths = []
+            for utterance in conversation:
+                conv_role = "__" + utterance[role_key] + "__"
+                text_with_role = conv_role + " " + utterance[text_key]
+                lengths.append(len(text_with_role.split()))
+                text += " " + text_with_role
+                roles += " " + conv_role
+
+            example = Example.fromlist([text, roles], fields)
+            example.sl = lengths
+            # sanity check if the sl is much larger than expected ignore
+            if max(example.sl) < max_sl:
+                yield example
+
+
 class HierarchicalDatasetFromDataFrame(Dataset):
 
     def __init__(self, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str,
@@ -107,10 +142,10 @@ class HierarchicalDatasetFromDataFrame(Dataset):
         Args:
             df (Union[pd.DataFrame, List[pd.DataFrame]]: A dataframe or a list of dataframes with the data
             text_field (Field): a torchtext Field object that will process the tokenizations
-            batch_col (str): The name of the column in the data df that will be used to group the batches
-            text_col (str): The name of the column in the data containing the text data
-            role_col (str): The name of the column in the data containing the role/name of the person speaking
-            sort_col (str): The name of the column in the data that will be used to sort the data of every group
+            batch_col (str): The name of the column in the data df that will be used to group the conversations, e.g. chat_id
+            text_col (str): The name of the column in the data containing the text data, e.g. body
+            role_col (str): The name of the column in the data containing the role/name of the person speaking, e.g. role
+            sort_col (str): The name of the column in the data that will be used to sort the data of every group, e.g. timestamp
             **kwargs:
         """
         fields = [("text", text_field), ("roles", text_field)]
@@ -164,5 +199,62 @@ class HierarchicalDatasetFromFiles(HierarchicalDatasetFromDataFrame):
         train_data = None if train_path is None else cls(path=os.path.join(path, train_path), max_sl=max_sl, **kwargs)
         val_data = None if val_path is None else cls(path=os.path.join(path, val_path), max_sl=max_sl, **kwargs)
         test_data = None if test_path is None else cls(path=os.path.join(path, test_path), max_sl=max_sl, **kwargs)
+
+        return tuple(d for d in (train_data, val_data, test_data) if d is not None)
+
+
+class DialogueDataset(Dataset):
+
+    def __init__(self, path: Union[Path, str], text_field: Field, utterance_key: str,
+                 text_key: str, role_key: str, sort_key: str, max_sl: int = 1000, **kwargs):
+        """
+
+        Args:
+            path (Path,str): the path to a directory with json files to load
+            text_field (Field): a torchtext Field object that will tokenize the data
+            utterance_key (str): The name of the key in the data that will be contain the utterances (e.g. utterances)
+            text_key (str): The name of the key in the json containing the text data
+            role_key (str): The name of the key in the json containing the role/name of the person speaking
+            sort_key (str): The name of the key in the json that will be used to sort the data of every group
+            **kwargs:
+
+            An example json could be like this:
+
+            [   {utterance_col:[
+                    {text_col:body, sort_col:time1, role_col:user1},
+                    {text_col:body, sort_col:time2, role_col:user2}]
+                 },
+                {utterance_col:[
+                    {text_col:body, sort_col:time1, role_col:user1},
+                    {text_col:body, sort_col:time2, role_col:user2}]
+                 }
+            ]
+        """
+        path = Path(path) if isinstance(path, str) else path
+        fields = [("text", text_field), ("roles", text_field)]
+        iterator = json_to_dialogue_examples(path_dir=path, fields=fields, utterance_key=utterance_key,
+                                             role_key=role_key, text_key=text_key, sort_key=sort_key, max_sl=max_sl
+                                             )
+        if path is not None:
+            examples_pickle = path / "examples.pickle"
+            if examples_pickle.exists():
+                with examples_pickle.open("rb") as fh:
+                    examples = pickle.load(fh)
+            else:
+                with examples_pickle.open('wb') as fh:
+                    examples = [i for i in iterator]
+                    pickle.dump(examples, fh)
+        else:
+            examples = [i for i in iterator]
+        super().__init__(examples=examples, fields=fields, **kwargs)
+
+    @classmethod
+    def splits(cls, path: str, train_path: Optional[str] = None, val_path: Optional[str] = None,
+               test_path: Optional[str] = None, max_sl: int = 1000, **kwargs) -> Tuple[
+        'DialogueDataset', ...]:
+        path = Path(path)
+        train_data = None if train_path is None else cls(path=path / train_path, max_sl=max_sl, **kwargs)
+        val_data = None if val_path is None else cls(path=path / val_path, max_sl=max_sl, **kwargs)
+        test_data = None if test_path is None else cls(path=path / test_path, max_sl=max_sl, **kwargs)
 
         return tuple(d for d in (train_data, val_data, test_data) if d is not None)

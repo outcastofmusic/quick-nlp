@@ -9,7 +9,6 @@ from quicknlp.utils import get_trainable_parameters
 
 params = [(True), (False)]
 ids = ["bidir", "unidir"]
-
 model_type = ["simple", "attention"]
 
 
@@ -46,4 +45,4 @@ def test_hred_training_parameters(model, hredmodel):
 def test_hred_encoder_decoder_model(model):
     enc_dec_model = HREDModel(model)
     groups = enc_dec_model.get_layer_groups()
-    assert len(groups) == 5
+    assert len(groups) == 6

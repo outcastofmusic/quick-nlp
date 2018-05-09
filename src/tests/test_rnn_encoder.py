@@ -1,7 +1,9 @@
 import numpy as np
-from fastai.core import V, T, to_gpu, to_np
+from fastai.core import T, V, to_gpu, to_np
 
-from quicknlp.modules import EmbeddingRNNEncoder
+from quicknlp.modules import RNNLayers
+from quicknlp.modules.embeddings import DropoutEmbeddings
+from quicknlp.modules.basic_encoder import Encoder
 
 
 def test_BiRNNEncoder():
@@ -9,13 +11,22 @@ def test_BiRNNEncoder():
     emb_sz = 2
     nhid = 6
     # Given a birnnencoder
-    encoder = EmbeddingRNNEncoder(ntoken, emb_sz, nhid=nhid, nlayers=2, pad_token=0,
-                                  dropouth=0.0, dropouti=0.0, dropoute=0.0, wdrop=0.0)
+
+    embedding = DropoutEmbeddings(ntokens=ntoken, emb_size=emb_sz, pad_token=0,
+                                  dropouti=0.0, dropoute=0.0)
+    rnn_layers = RNNLayers(in_dim=emb_sz,
+                           nhid=nhid,
+                           nlayers=2,
+                           out_dim=emb_sz,
+                           dropouth=0.0,
+                           wdrop=0.0,
+                           )
+    encoder = Encoder(embedding_layer=embedding, encoder_layer=rnn_layers)
 
     encoder = to_gpu(encoder)
     assert encoder is not None
 
-    weight = encoder.encoder.weight
+    weight = encoder.embedding_layer.weight
     assert (4, 2) == weight.shape
     sl = 2
     bs = 3
@@ -24,7 +35,7 @@ def test_BiRNNEncoder():
     vin = V(T(inputs))
     # Then the initial output states should be zero
     encoder.reset(bs)
-    initial_hidden = encoder.hidden
+    initial_hidden = encoder.encoder_layer.hidden
     h = []
     c = []
     for layer in initial_hidden:
@@ -32,14 +43,14 @@ def test_BiRNNEncoder():
         c.append(layer[1].data.cpu().numpy())
         assert h[-1].sum() == 0
         assert c[-1].sum() == 0
-    embeddings = encoder.encoder(vin)
+    embeddings = encoder.embedding_layer(vin)
     assert (2, 3, emb_sz) == embeddings.shape
 
     # Then the the new states are different from before
     raw_outputs, outputs = encoder(vin)
     for r, o in zip(raw_outputs, outputs):
         assert np.allclose(to_np(r), to_np(o))
-    initial_hidden = encoder.hidden
+    initial_hidden = encoder.encoder_layer.hidden
     h1 = []
     c1 = []
     for hl, cl, layer in zip(h, c, initial_hidden):
@@ -52,7 +63,7 @@ def test_BiRNNEncoder():
     raw_outputs, outputs = encoder(vin)
     for r, o in zip(raw_outputs, outputs):
         assert np.allclose(to_np(r), to_np(o))
-    initial_hidden = encoder.hidden
+    initial_hidden = encoder.encoder_layer.hidden
 
     for hl, cl, layer in zip(h1, c1, initial_hidden):
         h_new = to_np(layer[0])

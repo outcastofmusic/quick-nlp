@@ -1,27 +1,24 @@
-import torch as tr
-from fastai.core import T, V, to_gpu
+from fastai.core import V, to_gpu
+from torch.optim import Adam
 
-from quicknlp.modules.transformer import TransformerLayer, TransformerLayerDecoder
-from quicknlp.utils import assert_dims
-
-
-def test_transfomer_layer():
-    sl = 10
-    bs = 2
-    in_features = 32
-    inputs = tr.randn([sl, bs, in_features])
-    inputs = to_gpu(V(T(inputs)))
-    transfomer = to_gpu(TransformerLayer(in_features=in_features, num_heads=8))
-    outputs = transfomer(inputs)
-    assert_dims(outputs, [sl, bs, in_features])
+from quicknlp.data.s2s_model_data_loader import decoder_loss
+from quicknlp.models.transformer import Transformer
+from quicknlp.utils import get_trainable_parameters
 
 
-def test_transfomer_layer_decoder():
-    sl = 10
-    bs = 2
-    in_features = 32
-    inputs = tr.randn([sl, bs, in_features])
-    inputs = to_gpu(V(T(inputs)))
-    transfomer = to_gpu(TransformerLayerDecoder(in_features=in_features, num_heads=8))
-    outputs = transfomer(inputs, inputs)
-    assert_dims(outputs, [sl, bs, in_features])
+
+def test_model(s2smodel):
+    ntoken = [s2smodel.nt[name] for name in s2smodel.trn_dl.source_names]
+    model = Transformer(ntokens=ntoken, max_tokens=5, eos_token=s2smodel.eos_idx)
+    model = to_gpu(model)
+    *xs, y = next(iter(s2smodel.trn_dl))
+    xs = V(xs)
+    y = V(y)
+    optimizer = Adam(model.parameters())
+    output = model(*xs)
+    optimizer.zero_grad()
+    loss = decoder_loss(input=output[0], target=y, pad_idx=s2smodel.pad_idx)
+    loss.backward()
+    model_parameters = get_trainable_parameters(model)
+    grad_flow_parameters = get_trainable_parameters(model, grad=True)
+    assert set(model_parameters) == set(grad_flow_parameters)

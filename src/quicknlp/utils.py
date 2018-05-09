@@ -1,13 +1,20 @@
+import json
+from functools import partial
 from inspect import signature
-from typing import List, Tuple, Optional, Union, Sequence, Any, Callable
+from operator import itemgetter
+from pathlib import Path
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 
 from quicknlp.data.model_helpers import BatchBeamTokens
 
 States = List[Tuple[torch.Tensor, torch.Tensor]]
+
+HParam = Union[List[int], int]
 
 
 def concat_bidir_state(states: States) -> States:
@@ -165,7 +172,7 @@ def get_kwarg(kwargs, name, default_value=None, remove=True):
         value = kwargs.pop(name) if name in kwargs else default_value
     else:
         value = kwargs.get(name, default_value)
-    return value, kwargs
+    return value
 
 
 def call_with_signature(callable_fn: Callable, *args, **kwargs):
@@ -175,3 +182,48 @@ def call_with_signature(callable_fn: Callable, *args, **kwargs):
         if param.name in kwargs:
             new_kwargs[param.name] = kwargs[param.name]
     return callable_fn(*args, **new_kwargs)
+
+
+def get_pairs_from_dialogues(path_dir, utterance_key, sort_key, role_key, text_key, response_role):
+    for file_index, file in enumerate(path_dir.glob("*.json")):
+        with file.open('r', encoding='utf-8') as fh:
+            dialogues = json.load(fh)
+        for dialogue in tqdm(dialogues, desc=f'processed file {file}'):
+            if isinstance(sort_key, str):
+                key = itemgetter(sort_key)
+            elif callable(sort_key):
+                key = sort_key
+            conversation = sorted(dialogue[utterance_key], key=key)
+            text = ""
+            for utterance in conversation:
+                conv_role = "__" + utterance[role_key] + "__"
+                text_with_role = conv_role + " " + utterance[text_key]
+                if text != "" and conv_role == response_role:
+                    yield text, text_with_role
+                text += " " + text_with_role
+
+
+def save_pairs_to_tsv(pairs, filename):
+    filename = Path(filename)
+    assert filename.name.endswith(".tsv")
+    filename.parent.mkdir(exist_ok=True, parents=True)
+    with filename.open('w', encoding='utf-8') as fh:
+        fh.write("context\tresponse\n")
+        for pair in pairs:
+            fh.write("{}\t{}\n".format(pair['context'], pair['response']))
+
+
+def convert_dialogues_to_pairs(path_dir, output_dir, utterance_key, sort_key, role_key, text_key, response_role,
+                               train_path=None, val_path=None, test_path=None):
+    path_dir = Path(path_dir)
+    iter_func = partial(get_pairs_from_dialogues, utterance_key=utterance_key, sort_key=sort_key,
+                        role_key=role_key, text_key=text_key, response_role=response_role)
+
+    def convert_data(folder):
+        if folder is not None:
+            input_path = path_dir / folder
+            save_pairs_to_tsv(iter_func(input_path), output_dir / folder / "dialogues.tsv")
+
+    convert_data(train_path)
+    convert_data(val_path)
+    convert_data(test_path)

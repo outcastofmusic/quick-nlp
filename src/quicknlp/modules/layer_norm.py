@@ -20,8 +20,8 @@ class LayerNorm(nn.Module):
             self.beta = nn.Parameter(torch.zeros(num_features))
 
     def forward(self, x):
-        mean = x.mean(-1).unsqueeze(-1)
-        std = x.std(-1).unsqueeze(-1)
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
         y = (x - mean) / (std + self.eps)
         if self.affine:
             shape = [1] * (len(y.shape) - 1) + [-1]

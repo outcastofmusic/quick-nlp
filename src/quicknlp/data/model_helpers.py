@@ -1,9 +1,8 @@
-from itertools import chain
-from typing import Union, List, Dict
+from typing import Dict, List, Union
 
 import numpy as np
 import pandas as pd
-from fastai.core import VV, to_np, BasicModel
+from fastai.core import BasicModel, VV, to_np
 from torchtext.data import Field
 
 BeamTokens = List[str]
@@ -70,25 +69,12 @@ def predict_with_seq2seq(m, dl, num_beams=1):
     return predictions, targets, inputs
 
 
-class EncoderDecoderModel(BasicModel):
-    def _layer_groups(self, layer, groups=None, add_encoder=True, add_projection=True):
-        groups = [] if groups is None else groups
-        if hasattr(layer, "encoder") and add_encoder:
-            groups.append((layer.encoder, layer.dropouti))
-        groups.append(tuple([i for i in chain(*zip(layer.rnns, layer.dropouths))]))
-        if hasattr(layer, "projection_layer") and add_projection:
-            groups.append((layer.projection_layer.dropout, layer.projection_layer.layers))
-        return groups
-
-
-class S2SModel(EncoderDecoderModel):
+class S2SModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
-        groups = self._layer_groups(self.model.encoder)
-        return self._layer_groups(self.model.decoder, groups)
+        return [self.model.encoder, self.model.decoder]
 
 
-class HREDModel(EncoderDecoderModel):
+class HREDModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
-        groups = self._layer_groups(self.model.query_encoder)
-        groups = self._layer_groups(self.model.session_encoder, groups)
-        return self._layer_groups(self.model.decoder, groups, add_encoder=False)
+        return [self.model.query_encoder, self.model.session_encoder, self.model.decoder,
+                self.model.decoder_state_linear]
