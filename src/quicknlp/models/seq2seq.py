@@ -80,7 +80,7 @@ class Seq2Seq(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.nt = ntoken[-1]
+        self.nt = ntoken[-1] # number of possible tokens
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder

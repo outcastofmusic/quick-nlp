@@ -31,7 +31,7 @@ def test_transfomer_layer_decoder():
 def test_transformer_encoder():
     sl = 10
     bs = 2
-    in_features = 32
+    in_features = 300
     num_layers = 5
     inputs = tr.randn([sl, bs, in_features])
     inputs = to_gpu(V(T(inputs)))

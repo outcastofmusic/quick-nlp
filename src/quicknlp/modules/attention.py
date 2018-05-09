@@ -60,16 +60,17 @@ class SDPAttention(Attention):
 
 class MultiHeadAttention(Attention):
 
-    def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim, p=0.0):
+    def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim, p=0.0, out_dim=None):
         super().__init__()
         self.num_heads = num_heads
         self.nhid = nhid
-        self.out_dim = self.nhid * num_heads
-        self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.out_dim, bias=False)
-        self.query_linear = nn.Linear(in_features=query_dim, out_features=self.out_dim, bias=False)
-        self.values_linear = nn.Linear(in_features=values_dim, out_features=self.out_dim, bias=False)
+        self.linear_out_dim = self.nhid * num_heads
+        self.out_dim = self.linear_out_dim if out_dim is None else out_dim
+        self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.linear_out_dim, bias=False)
+        self.query_linear = nn.Linear(in_features=query_dim, out_features=self.linear_out_dim, bias=False)
+        self.values_linear = nn.Linear(in_features=values_dim, out_features=self.linear_out_dim, bias=False)
         self.attention = SDPAttention(self.nhid, p=p)
-        self.linear = nn.Linear(in_features=self.out_dim, out_features=self.out_dim, bias=False)
+        self.linear = nn.Linear(in_features=self.linear_out_dim, out_features=self.out_dim, bias=False)
 
     def forward(self, query, keys, values):
         # Query dim [bs, dimQ]
@@ -91,5 +92,4 @@ class MultiHeadAttention(Attention):
         for q, k, v in zip(query_heads, key_heads, value_heads):
             heads.append(self.attention(q, k, v))
         outputs = tr.cat(heads, dim=-1)
-        assert_dims(outputs, [bs, self.out_dim])
-        return self.linear(outputs)
+        return assert_dims(self.linear(outputs), [bs, self.out_dim])

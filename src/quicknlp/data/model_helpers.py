@@ -1,4 +1,3 @@
-from itertools import chain
 from typing import Dict, List, Union
 
 import numpy as np
@@ -70,38 +69,12 @@ def predict_with_seq2seq(m, dl, num_beams=1):
     return predictions, targets, inputs
 
 
-class EncoderDecoderModel(BasicModel):
-    def _layer_groups(self, layer, groups=None):
-        groups = [] if groups is None else groups
-        if hasattr(layer, "embedding_layer"):
-            embedding_layer = layer.embedding_layer
-            groups.append((embedding_layer.encoder, embedding_layer.dropout_input))
-        if hasattr(layer, "encoder_layer"):
-            encoder_layer = layer.encoder_layer
-            groups.append(tuple([i for i in chain(*zip(encoder_layer.layers, encoder_layer.dropouths))]))
-        if hasattr(layer, "decoder_layer"):
-            decoder_layer = layer.decoder_layer
-            groups.append(tuple([i for i in chain(*zip(decoder_layer.layers, decoder_layer.dropouths))]))
-        if hasattr(layer, "projection_layer"):
-            proj_layer = layer.projection_layer
-            if hasattr(proj_layer, "layers"):
-                groups.append((proj_layer.dropout, proj_layer.layers))
-            elif hasattr(proj_layer, "attention"):
-                groups.append((proj_layer.attention, proj_layer.projection1, proj_layer.projection2))
-        else:
-            if hasattr(layer, "layers") and hasattr(layer, "dropouths"):
-                groups.append(tuple([i for i in chain(*zip(layer.layers, layer.dropouths))]))
-        return groups
-
-
-class S2SModel(EncoderDecoderModel):
+class S2SModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
-        groups = self._layer_groups(self.model.encoder)
-        return self._layer_groups(self.model.decoder, groups)
+        return [self.model.encoder, self.model.decoder]
 
 
-class HREDModel(EncoderDecoderModel):
+class HREDModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
-        groups = self._layer_groups(self.model.query_encoder)
-        groups = self._layer_groups(self.model.session_encoder, groups)
-        return self._layer_groups(self.model.decoder, groups)
+        return [self.model.query_encoder, self.model.session_encoder, self.model.decoder,
+                self.model.decoder_state_linear]

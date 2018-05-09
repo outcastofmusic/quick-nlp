@@ -52,4 +52,4 @@ def test_seq2seq_training_parameters(model, s2smodel):
 def test_seq2seq_encoder_decoder_model(model):
     enc_dec_model = S2SModel(model)
     groups = enc_dec_model.get_layer_groups()
-    assert len(groups) == 5
+    assert len(groups) == 2

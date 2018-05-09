@@ -39,7 +39,7 @@ class AttentionLayer(nn.Module):
         super().__init__()
         self.in_dim = in_dim
         self.nhid = in_dim // num_heads
-        self.attention = MultiHeadAttention(num_heads=num_heads, nhid=self.nhid,
+        self.attention = MultiHeadAttention(num_heads=num_heads, nhid=self.nhid, out_dim=self.in_dim,
                                             keys_dim=self.in_dim, values_dim=self.in_dim, query_dim=self.in_dim, p=p)
 
     def forward(self, input_tensor, keys_vector, values_vector, mask=False):
