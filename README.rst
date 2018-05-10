@@ -21,7 +21,7 @@ Features
     - Seq2Seq https://arxiv.org/abs/1506.05869
     - Seq2Seq with Attention https://arxiv.org/abs/1703.03906
     - HRED http://www.aaai.org/ocs/index.php/AAAI/AAAI17/paper/download/14567/14219
-    - Attention is all you need (In Progress) http://papers.nips.cc/paper/7181-attention-is-all-you-need
+    - Attention is all you need http://papers.nips.cc/paper/7181-attention-is-all-you-need
     - Depthwise Separable Convolutions for Neural Machine Translation (TODO) https://arxiv.org/abs/1706.03059
 
 
@@ -44,10 +44,10 @@ After setting up an environment using the fasta.ai instructions please clone the
 Docker Image
 ~~~~~~~~~~~~
 
-A docker image with the latest master is available to run it please run:
+A docker image with the latest master is available to use it please run:
 
 .. code-block:: bash
-    
+
     docker run --runtime nvidia -it -p 8888:8888 --mount type=bind,source="$(pwd)",target=/workspace agispof/quicknlp:latest
 
 this will mount your current directory to /workspace and start a jupyter lab session in that directory
