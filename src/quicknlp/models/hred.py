@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from fastai.lm_rnn import repackage_var
-
 from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNLayers
 from quicknlp.utils import assert_dims, get_kwarg, get_list
 
@@ -25,6 +24,8 @@ def s2sloss(input, target, pad_idx, *args, **kwargs):
 
 class HRED(nn.Module):
     """Basic HRED model"""
+
+    BPTT_MAX_UTTERANCES = 20
 
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
@@ -48,7 +49,6 @@ class HRED(nn.Module):
         # allow for the same or different parameters between encoder and decoder
         ntoken, emb_sz, nhid, nlayers = get_list(ntoken), get_list(emb_sz, 2), get_list(nhid, 3), get_list(nlayers, 3)
         dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)
-        dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)
         dropoute = get_kwarg(kwargs, name="dropout_e", default_value=0.1)
         dropouti = get_kwarg(kwargs, name="dropout_i", default_value=0.65)
         dropouth = get_kwarg(kwargs, name="dropout_h", default_value=0.3)
@@ -62,7 +62,7 @@ class HRED(nn.Module):
                                                     )
 
         encoder_rnn = RNNLayers(in_dim=emb_sz[0],
-                                out_dim=kwargs.get("out_dim", emb_sz[0]),
+                                out_dim=kwargs.get("out_dim_encoder", emb_sz[0]),
                                 nhid=nhid[0], bidir=bidir,
                                 dropouth=dropouth,
                                 wdrop=wdrop,
@@ -88,11 +88,15 @@ class HRED(nn.Module):
                                                         dropouti=dropouti
                                                         )
 
-        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]), out_dim=kwargs.get("out_dim", emb_sz[-1]),
+        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]),
+                                out_dim=kwargs.get("out_dim_decoder", emb_sz[-1]),
                                 nhid=nhid[-1], bidir=False, dropouth=dropouth,
                                 wdrop=wdrop, nlayers=nlayers[-1], cell_type=self.cell_type)
 
-        projection_layer = Projection(out_dim=ntoken[-1], in_dim=emb_sz[-1], dropout=dropoutd,
+        # allow for changing sizes of decoder output
+        in_dim = decoder_rnn.out_dim
+        nhid = emb_sz[-1] if in_dim != emb_sz[-1] else None
+        projection_layer = Projection(out_dim=ntoken[-1], in_dim=in_dim, nhid=nhid, dropout=dropoutd,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )
         self.decoder = Decoder(
@@ -103,7 +107,8 @@ class HRED(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.decoder_state_linear = nn.Linear(in_features=nhid[-1], out_features=self.decoder.layers[0].output_size)
+        self.decoder_state_linear = nn.Linear(in_features=self.session_encoder.out_dim,
+                                              out_features=self.decoder.layers[0].output_size)
         self.nt = ntoken[-1]
 
     def create_decoder_state(self, session_outputs):
@@ -125,7 +130,9 @@ class HRED(nn.Module):
             query_encoder_raw_outputs.append(raw_outputs)
             # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
             # the gradient backpropagation and fit it into memory
-            out = repackage_var(outputs[-1]) if num_utterances > 20 and index <= num_utterances // 2 else outputs[-1]
+            out = repackage_var(
+                outputs[-1]) if num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[
+                -1]
             query_encoder_outputs.append(out)
         query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)
         raw_outputs_session, session_outputs = self.session_encoder(query_encoder_outputs)

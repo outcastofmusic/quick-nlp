@@ -73,7 +73,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
     def from_dataframes(cls, path: str, text_field: Field, train_df: pd.DataFrame, val_df: pd.DataFrame,
                         text_col: str, batch_col: str, role_col: str, sort_col: str,
                         test_df: Optional[pd.DataFrame] = None, target_names: Optional[List[str]] = None, bs: int = 64,
-                        sort_key: Optional[Callable] = None, max_sl: int = 1000,
+                        sort_key: Optional[Callable] = None, max_sl: int = 1000, reset: bool = False,
                         **kwargs) -> 'HierarchicalModelData':
         """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from dataframes
 
@@ -92,6 +92,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             role_col (str): A column with the role of the person saying every text
             sort_key (Optional[Callable]): A function to sort the examples in batch size based on a field
             max_sl (Int): The maximum sequence length allowed when creating examples dialogues with larger sl will be filtered out
+            reset (bool): If true and example pickles exist delete them
             **kwargs:
 
         Returns:
@@ -111,6 +112,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                                                            role_col=role_col,
                                                            sort_col=sort_col,
                                                            max_sl=max_sl,
+                                                           reset=reset
                                                            )
 
         train_ds = datasets[0]
@@ -124,7 +126,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                         text_col: str, batch_col: str, sort_col: str, role_col: str,
                         file_format: str,
                         test: Optional[str] = None, target_names: Optional[List[str]] = None, bs: Optional[int] = 64,
-                        sort_key: Union[Callable, str] = "sl", max_sl: int = 1000,
+                        sort_key: Union[Callable, str] = "sl", max_sl: int = 1000, reset: bool = False,
                         **kwargs) -> 'HierarchicalModelData':
         """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from files
 
@@ -146,6 +148,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             sort_key (Union[Callable,str]): A function to sort the examples in batch size based on a field or
                 sl for sorting by sequence length, or cl for sorting by conversation length
             max_sl (Int): The maximum sequence length allowed when creating examples dialogues with larger sl will be filtered out
+            reset (bool): If true and example pickles exist delete them
             **kwargs:
 
         Returns:
@@ -162,7 +165,8 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                                                        role_col=role_col,
                                                        sort_col=sort_col,
                                                        file_format=file_format,
-                                                       max_sl=max_sl
+                                                       max_sl=max_sl,
+                                                       reset=reset
                                                        )
         trn_ds = datasets[0]
         val_ds = datasets[1]
@@ -174,7 +178,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
     def from_json_files(cls, path: str, text_field: Field, train: str, validation: str,
                         text_key: str, utterance_key: str, role_key: str, sort_key_json: Union[Callable, str, str],
                         test: Optional[str] = None, target_names: Optional[List[str]] = None, bs: Optional[int] = 64,
-                        sort_key: Union[Callable, str] = "sl", max_sl: int = 1000,
+                        sort_key: Union[Callable, str] = "sl", max_sl: int = 1000, reset: bool = False,
                         **kwargs) -> 'HierarchicalModelData':
         """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from files
 
@@ -195,6 +199,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
             sort_key (Union[Callable,str]): A function to sort the examples in batch size based on a field or
                 sl for sorting by sequence length, or cl for sorting by conversation length
             max_sl (Int): The maximum sequence length allowed when creating examples dialogues with larger sl will be filtered out
+            reset (bool): If true and example pickles exist delete them
             **kwargs:
 
         Returns:
@@ -210,7 +215,8 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                                           utterance_key=utterance_key,
                                           role_key=role_key,
                                           sort_key=sort_key_json,
-                                          max_sl=max_sl
+                                          max_sl=max_sl,
+                                          reset=reset,
                                           )
         trn_ds = datasets[0]
         val_ds = datasets[1]

@@ -136,16 +136,18 @@ def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]]
 class HierarchicalDatasetFromDataFrame(Dataset):
 
     def __init__(self, df: Union[pd.DataFrame, List[pd.DataFrame]], text_field: Field, batch_col: str,
-                 text_col: str, role_col: str, sort_col: str, path: Optional[str] = None, max_sl: int = 1000, **kwargs):
+                 text_col: str, role_col: str, sort_col: str, path: Optional[str] = None, max_sl: int = 1000,
+                 reset: bool = False, **kwargs):
         """
 
         Args:
             df (Union[pd.DataFrame, List[pd.DataFrame]]: A dataframe or a list of dataframes with the data
-            text_field (Field): a torchtext Field object that will process the tokenizations
+            text_field (Field): a torchtext.data.Field object that will process the tokenizations
             batch_col (str): The name of the column in the data df that will be used to group the conversations, e.g. chat_id
             text_col (str): The name of the column in the data containing the text data, e.g. body
             role_col (str): The name of the column in the data containing the role/name of the person speaking, e.g. role
             sort_col (str): The name of the column in the data that will be used to sort the data of every group, e.g. timestamp
+            reset (bool): If true and example pickles exist delete them
             **kwargs:
         """
         fields = [("text", text_field), ("roles", text_field)]
@@ -154,7 +156,7 @@ class HierarchicalDatasetFromDataFrame(Dataset):
         if path is not None:
             path = Path(path)
             examples_pickle = path / "examples.pickle"
-            if examples_pickle.exists():
+            if examples_pickle.exists() and not reset:
                 with examples_pickle.open("rb") as fh:
                     examples = pickle.load(fh)
             else:
@@ -206,7 +208,7 @@ class HierarchicalDatasetFromFiles(HierarchicalDatasetFromDataFrame):
 class DialogueDataset(Dataset):
 
     def __init__(self, path: Union[Path, str], text_field: Field, utterance_key: str,
-                 text_key: str, role_key: str, sort_key: str, max_sl: int = 1000, **kwargs):
+                 text_key: str, role_key: str, sort_key: str, max_sl: int = 1000, reset=False, **kwargs):
         """
 
         Args:
@@ -216,6 +218,7 @@ class DialogueDataset(Dataset):
             text_key (str): The name of the key in the json containing the text data
             role_key (str): The name of the key in the json containing the role/name of the person speaking
             sort_key (str): The name of the key in the json that will be used to sort the data of every group
+            reset (bool): If true and example pickles exist delete them
             **kwargs:
 
             An example json could be like this:
@@ -237,7 +240,7 @@ class DialogueDataset(Dataset):
                                              )
         if path is not None:
             examples_pickle = path / "examples.pickle"
-            if examples_pickle.exists():
+            if examples_pickle.exists() and not reset:
                 with examples_pickle.open("rb") as fh:
                     examples = pickle.load(fh)
             else:
