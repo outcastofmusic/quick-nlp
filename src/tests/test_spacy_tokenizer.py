@@ -1,7 +1,6 @@
 import subprocess
 
 import pytest
-
 from quicknlp.data import SpacyTokenizer
 
 
@@ -25,6 +24,16 @@ def test_spacy_tokenizer(tokenizer):
     expected_results = ["You", "guys", ",", "you", "guys", "!", "Chef", "is", "going", "away", ".", "\n"]
     results = tokenizer(sentence)
     assert len(results) == 12
+    assert results == expected_results
+
+
+def test_spacy_tokenizer_regex_patterns(spacy_en):
+    tokenizer = SpacyTokenizer(regex_cases=[r'__name_\w+__'])
+    sentence = "You guys, you guys! __name_john__ Chef is going away. \n"
+    expected_results = ["You", "guys", ",", "you", "guys", "!", "__name_john__", "Chef", "is", "going", "away", ".",
+                        "\n"]
+    results = tokenizer(sentence)
+    assert len(results) == 13
     assert results == expected_results
 
 
