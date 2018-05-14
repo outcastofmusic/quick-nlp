@@ -3,10 +3,9 @@ from typing import Iterator, List, Optional, Tuple
 
 import numpy as np
 import torch.cuda as cuda
+from quicknlp.utils import assert_dims
 from torch import LongTensor
 from torchtext.data import Batch, BucketIterator, Field
-
-from quicknlp.utils import assert_dims
 
 Conversations = List[List[str]]
 Roles = List[str]
@@ -39,7 +38,6 @@ class HierarchicalIterator(BucketIterator):
             targets, *_ = self.pad(example, max_sl=max_sl, max_conv=max_conv, field=self.text_field,
                                    target_roles=self.target_roles)
             padded_targets.extend(targets)
-
         self.text_field.include_lengths = False
 
         data = self.text_field.numericalize(padded_examples, device=self.device, train=self.train)

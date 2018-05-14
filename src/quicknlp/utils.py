@@ -8,9 +8,10 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from tqdm import tqdm
-
+from fastai.core import to_np
+from fastai.learner import Learner, ModelData
 from quicknlp.data.model_helpers import BatchBeamTokens
+from tqdm import tqdm
 
 States = List[Tuple[torch.Tensor, torch.Tensor]]
 
@@ -85,12 +86,32 @@ def concat_bidir_state(states: States) -> States:
 #     return summary
 
 
-def print_batch(lr, dt, input_field, output_field, num_batches=1, num_sentences=-1, is_test=False, num_beams=1):
-    predictions, targets, inputs = lr.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
+def print_features(modeldata: ModelData, num_batches: int, num_sentences: int):
+    inputs, targets = [], []
+    for *x, y in iter(modeldata.trn_dl):
+        inputs.append(to_np(x[0]))
+        targets.append(to_np(y))
+    for batch_num, (input, target) in enumerate(zip(inputs, targets)):
+        input = np.transpose(input, [1, 2, 0])  # transpose number of utterances to beams [sl, bs, nb]
+        inputs_str = modeldata.itos(input, "text")
+        inputs_str = ["\n".join(conv) for conv in inputs_str]
+        targets_str = modeldata.itos(target, "text")
+        for index, (inp, targ) in enumerate(zip(inputs_str, targets_str)):
+            print(
+                f'BATCH: {batch_num} SAMPLE : {index}\nINPUT:\n{"".join(inp)}\nTARGET:\n{ "".join(targ)}\n\n')
+            if 0 < num_sentences <= index - 1:
+                break
+        if 0 < num_batches <= batch_num - 1:
+            break
+
+
+def print_batch(learner: Learner, modeldata: ModelData, input_field, output_field, num_batches=1, num_sentences=-1,
+                is_test=False, num_beams=1):
+    predictions, targets, inputs = learner.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
     for batch_num, (input, target, prediction) in enumerate(zip(inputs, targets, predictions)):
-        inputs_str: BatchBeamTokens = dt.itos(input, input_field)
-        predictions_str: BatchBeamTokens = dt.itos(prediction, output_field)
-        targets_str: BatchBeamTokens = dt.itos(target, output_field)
+        inputs_str: BatchBeamTokens = modeldata.itos(input, input_field)
+        predictions_str: BatchBeamTokens = modeldata.itos(prediction, output_field)
+        targets_str: BatchBeamTokens = modeldata.itos(target, output_field)
         for index, (inp, targ, pred) in enumerate(zip(inputs_str, targets_str, predictions_str)):
             print(
                 f'batch: {batch_num} sample : {index}\ninput: {" ".join(inp)}\ntarget: { " ".join(targ)}\nprediction: {" ".join(pred)}\n\n')
@@ -100,18 +121,19 @@ def print_batch(lr, dt, input_field, output_field, num_batches=1, num_sentences=
             break
 
 
-def print_dialogue_batch(lr, dt, input_field, output_field, num_batches=1, num_sentences=-1, is_test=False,
+def print_dialogue_batch(learner: Learner, modeldata: ModelData, input_field, output_field, num_batches=1,
+                         num_sentences=-1, is_test=False,
                          num_beams=1):
-    predictions, targets, inputs = lr.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
+    predictions, targets, inputs = learner.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
     for batch_num, (input, target, prediction) in enumerate(zip(inputs, targets, predictions)):
         input = np.transpose(input, [1, 2, 0])  # transpose number of utterances to beams [sl, bs, nb]
-        inputs_str: BatchBeamTokens = dt.itos(input, input_field)
+        inputs_str: BatchBeamTokens = modeldata.itos(input, input_field)
         inputs_str: List[str] = ["\n".join(conv) for conv in inputs_str]
-        predictions_str: BatchBeamTokens = dt.itos(prediction, output_field)
-        targets_str: BatchBeamTokens = dt.itos(target, output_field)
+        predictions_str: BatchBeamTokens = modeldata.itos(prediction, output_field)
+        targets_str: BatchBeamTokens = modeldata.itos(target, output_field)
         for index, (inp, targ, pred) in enumerate(zip(inputs_str, targets_str, predictions_str)):
             print(
-                f'batch: {batch_num} sample : {index}\ninput: {"".join(inp)}\ntarget: { "".join(targ)}\nprediction: {"".join(pred)}\n\n')
+                f'BATCH: {batch_num} SAMPLE : {index}\nINPUT:\n{"".join(inp)}\nTARGET:\n{ "".join(targ)}\nPREDICTON:\n{"".join(pred)}\n\n')
             if 0 < num_sentences <= index - 1:
                 break
         if 0 < num_batches <= batch_num - 1:

@@ -84,16 +84,17 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
                             role_col: str, text_col: str, sort_col: str, max_sl=1000) -> Iterator[Example]:
     """convert df to dialogue examples"""
     df = [df] if not isinstance(df, list) else df
+    tokenize = fields[0][1].tokenize
     for file_index, _df in enumerate(df):
         for chat_id, conversation in tqdm(_df.groupby(batch_col), desc=f"processed file {file_index}/{len(df)}"):
             if conversation[role_col].nunique() > 1:
                 conversation = conversation.sort_values(by=sort_col)
                 conversation_tokens = "__" + conversation[role_col] + "__"
                 text_with_roles = (conversation_tokens + " " + conversation[text_col]).astype(str)
-                text_with_roles_length = text_with_roles.str.split().apply(len)
+                text_with_roles_length = text_with_roles.str.apply(lambda x: len(tokenize(x)))
                 text = "".join(text_with_roles.str.cat(sep=" "))
                 roles = "".join(conversation_tokens.str.cat(sep=" "))
-                example = Example.fromlist([text, roles], fields)
+                example = Example.fromlist([text.strip(), roles.strip()], fields)
                 example.sl = text_with_roles_length.tolist()
                 # sanity check if the sl is much larger than expected ignore
                 if max(example.sl) < max_sl:
@@ -119,14 +120,16 @@ def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]]
             text = ""
             roles = ""
             lengths = []
+            tokenize = fields[0][1].tokenize
             for utterance in conversation:
+                ut = utterance[text_key]
+                ut = " ".join(ut) if isinstance(ut, list) else ut
                 conv_role = "__" + utterance[role_key] + "__"
-                text_with_role = conv_role + " " + utterance[text_key]
-                lengths.append(len(text_with_role.split()))
+                text_with_role = conv_role + " " + ut
+                lengths.append(len(tokenize(text_with_role)))
                 text += " " + text_with_role
                 roles += " " + conv_role
-
-            example = Example.fromlist([text, roles], fields)
+            example = Example.fromlist([text.strip(), roles.strip()], fields)
             example.sl = lengths
             # sanity check if the sl is much larger than expected ignore
             if max(example.sl) < max_sl:
