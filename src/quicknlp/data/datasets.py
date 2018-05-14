@@ -91,7 +91,7 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
                 conversation = conversation.sort_values(by=sort_col)
                 conversation_tokens = "__" + conversation[role_col] + "__"
                 text_with_roles = (conversation_tokens + " " + conversation[text_col]).astype(str)
-                text_with_roles_length = text_with_roles.str.apply(lambda x: len(tokenize(x)))
+                text_with_roles_length = text_with_roles.apply(lambda x: len(tokenize(x)))
                 text = "".join(text_with_roles.str.cat(sep=" "))
                 roles = "".join(conversation_tokens.str.cat(sep=" "))
                 example = Example.fromlist([text.strip(), roles.strip()], fields)

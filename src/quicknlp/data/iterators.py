@@ -26,7 +26,7 @@ class HierarchicalIterator(BucketIterator):
 
     def process_minibatch(self, minibatch: List[Example]) -> Tuple[LT, LT, LT]:
         max_sl = max([max(ex.sl) for ex in minibatch])
-        max_conv = max([len(ex.roles) for ex in minibatch]) + 1  # add extra padding sentence for the target
+        max_conv = max([len(ex.roles) for ex in minibatch])
         padded_examples, padded_targets, padded_lengths, padded_roles = [], [], [], []
         for example in minibatch:
             examples, lens, roles = self.pad(example, max_sl=max_sl, max_conv=max_conv, field=self.text_field)

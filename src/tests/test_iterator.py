@@ -42,9 +42,9 @@ def test_hierarchical_iterator_process_minibatch(hiterator):
     cl = max([len(ex.roles) for ex in minibatch])
     sl = max([sl for ex in minibatch for sl in ex.sl])
     x0, x1, y = iterator.process_minibatch(minibatch)
-    assert_dims(x0, [cl, sl, bs])
-    assert_dims(x1, [cl, sl, bs])
-    assert_dims(y, [cl, sl - 1, bs])
+    assert_dims(x0, [cl - 1, sl, bs])
+    assert_dims(x1, [cl - 1, sl, bs])
+    assert_dims(y, [cl - 1, sl - 1, bs])
 
 
 def test_hierarchical_iterator(hiterator):
