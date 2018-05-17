@@ -10,8 +10,9 @@ import torch
 import torch.nn as nn
 from fastai.core import to_np
 from fastai.learner import Learner, ModelData
-from quicknlp.data.model_helpers import BatchBeamTokens
 from tqdm import tqdm
+
+from quicknlp.data.model_helpers import BatchBeamTokens
 
 States = List[Tuple[torch.Tensor, torch.Tensor]]
 
@@ -29,81 +30,44 @@ def concat_bidir_state(states: States) -> States:
     return state
 
 
-# def model_summary(m, input_size, dtype=float):
-#     def register_hook(module):
-#         def hook(module, input, output):
-#             class_name = str(module.__class__).split('.')[-1].split("'")[0]
-#             module_idx = len(summary)
-#
-#             m_key = '%s-%i' % (class_name, module_idx + 1)
-#             summary[m_key] = OrderedDict()
-#             summary[m_key]['input_shape'] = list(input[0].size())
-#             summary[m_key]['input_shape'][0] = -1
-#             if isinstance(output, (list, tuple)):
-#                 output_shape = output[0]
-#                 if isinstance(output_shape, (list, tuple)):
-#                     output_shape = [[-1] + list(output_shape[i].size())[1:] for i in range(len(output_shape))]
-#                 else:
-#                     output_shape = list(output_shape.size())
-#             else:
-#                 output_shape = [-1] + list(output.size())[1:]
-#             summary[m_key]['output_shape'] = output_shape
-#
-#             params = 0
-#             for name, param in module.named_parameters():
-#                 param_count = torch.prod(torch.LongTensor(list(param.size())))
-#                 summary[m_key][name] = param_count
-#                 params += param_count
-#                 summary[m_key]['trainable'] = param.requires_grad
-#             summary[m_key]['nb_params'] = params
-#
-#         if (not isinstance(module, nn.Sequential) and
-#                 not isinstance(module, nn.ModuleList) and
-#                 not (module == m)):
-#             hooks.append(module.register_forward_hook(hook))
-#
-#     summary = OrderedDict()
-#     hooks = []
-#     m.apply(register_hook)
-#     if isinstance(input_size[0], (list, tuple)):
-#         x = [to_gpu(Variable(torch.rand(1, *in_size) * 2)) for in_size in input_size]
-#     else:
-#         x = [to_gpu(Variable(torch.rand(1, *input_size) * 2))]
-#     if dtype == "int":
-#         if isinstance(input_size[0], (list, tuple)):
-#             x = [to_gpu(Variable(torch.rand(1, *in_size) * 2).long()) for in_size in input_size]
-#         else:
-#             x = [to_gpu(Variable(torch.rand(1, *input_size) * 2).long())]
-#     else:
-#         if isinstance(input_size[0], (list, tuple)):
-#             x = [to_gpu(Variable(torch.rand(1, *in_size) * 2)) for in_size in input_size]
-#         else:
-#             x = [to_gpu(Variable(torch.rand(1, *input_size) * 2))]
-#     m(*x)
-#
-#     for h in hooks:
-#         h.remove()
-#     return summary
-
-
-def print_features(modeldata: ModelData, num_batches: int, num_sentences: int):
-    inputs, targets = [], []
+def print_dialogue_features(modeldata: ModelData, num_batches: int, num_sentences: int):
+    inputs, responses, targets = [], [], []
     for *x, y in iter(modeldata.trn_dl):
         inputs.append(to_np(x[0]))
+        responses.append(to_np(x[1]))
         targets.append(to_np(y))
-    for batch_num, (input, target) in enumerate(zip(inputs, targets)):
+    for batch_num, (input, response, target) in enumerate(zip(inputs, responses, targets)):
         input = np.transpose(input, [1, 2, 0])  # transpose number of utterances to beams [sl, bs, nb]
         inputs_str = modeldata.itos(input, "text")
         inputs_str = ["\n".join(conv) for conv in inputs_str]
         targets_str = modeldata.itos(target, "text")
-        for index, (inp, targ) in enumerate(zip(inputs_str, targets_str)):
+        response_str = modeldata.itos(response, "text")
+        for index, (inp, resp, targ) in enumerate(zip(inputs_str, response_str, targets_str)):
             print(
-                f'BATCH: {batch_num} SAMPLE : {index}\nINPUT:\n{"".join(inp)}\nTARGET:\n{ "".join(targ)}\n\n')
+                f'BATCH: {batch_num} SAMPLE : {index}\nINPUT:\n{"".join(inp)}, {len(inp.split())}\nRESPONSE:\n{"".join(resp)}, {len(resp[0].split())}\nTARGET:\n{ "".join(targ)}, {len(targ[0].split())}\n\n')
             if 0 < num_sentences <= index - 1:
                 break
         if 0 < num_batches <= batch_num - 1:
             break
 
+
+def print_features(modeldata: ModelData, num_batches=1, num_sentences=-1):
+    inputs, responses, targets = [], [], []
+    for *x, y in iter(modeldata.trn_dl):
+        inputs.append(to_np(x[0]))
+        responses.append(to_np(x[1]))
+        targets.append(to_np(y))
+    for batch_num, (input, target, response) in enumerate(zip(inputs, targets, responses)):
+        inputs_str: BatchBeamTokens = modeldata.itos(input, modeldata.trn_dl.source_names[0])
+        response_str: BatchBeamTokens = modeldata.itos(response, modeldata.trn_dl.source_names[1])
+        targets_str: BatchBeamTokens = modeldata.itos(target, modeldata.trn_dl.target_names[0])
+        for index, (inp, targ, resp) in enumerate(zip(inputs_str, targets_str, response_str)):
+            print(
+                f'batch: {batch_num} sample : {index}\ninput: {" ".join(inp)}\ntarget: { " ".join(targ)}\nresponse: {" ".join(resp)}\n\n')
+            if 0 < num_sentences <= index - 1:
+                break
+        if 0 < num_batches <= batch_num - 1:
+            break
 
 def print_batch(learner: Learner, modeldata: ModelData, input_field, output_field, num_batches=1, num_sentences=-1,
                 is_test=False, num_beams=1):
@@ -215,13 +179,15 @@ def get_pairs_from_dialogues(path_dir, utterance_key, sort_key, role_key, text_k
                 key = itemgetter(sort_key)
             elif callable(sort_key):
                 key = sort_key
+            else:
+                raise ValueError("Invalid sort_key provided")
             conversation = sorted(dialogue[utterance_key], key=key)
             text = ""
             for utterance in conversation:
                 conv_role = "__" + utterance[role_key] + "__"
                 text_with_role = conv_role + " " + utterance[text_key]
-                if text != "" and conv_role == response_role:
-                    yield text, text_with_role
+                if text != "" and utterance[role_key] == response_role:
+                    yield dict(context=text, response=text_with_role)
                 text += " " + text_with_role
 
 
@@ -230,13 +196,12 @@ def save_pairs_to_tsv(pairs, filename):
     assert filename.name.endswith(".tsv")
     filename.parent.mkdir(exist_ok=True, parents=True)
     with filename.open('w', encoding='utf-8') as fh:
-        fh.write("context\tresponse\n")
         for pair in pairs:
             fh.write("{}\t{}\n".format(pair['context'], pair['response']))
 
 
 def convert_dialogues_to_pairs(path_dir, output_dir, utterance_key, sort_key, role_key, text_key, response_role,
-                               train_path=None, val_path=None, test_path=None):
+                               train_path=None, validation_path=None, test_path=None):
     path_dir = Path(path_dir)
     iter_func = partial(get_pairs_from_dialogues, utterance_key=utterance_key, sort_key=sort_key,
                         role_key=role_key, text_key=text_key, response_role=response_role)
@@ -247,5 +212,5 @@ def convert_dialogues_to_pairs(path_dir, output_dir, utterance_key, sort_key, ro
             save_pairs_to_tsv(iter_func(input_path), output_dir / folder / "dialogues.tsv")
 
     convert_data(train_path)
-    convert_data(val_path)
+    convert_data(validation_path)
     convert_data(test_path)

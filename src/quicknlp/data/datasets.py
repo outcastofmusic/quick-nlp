@@ -102,7 +102,9 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
 
 
 def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]], utterance_key: str, role_key: str,
-                              text_key: str, sort_key: str, max_sl=1000) -> Iterator[Example]:
+                              text_key: str, sort_key: str, max_sl: int = 1000,
+                              target_roles: Optional[List[str]] = None) -> \
+        Iterator[Example]:
     """Load dialogues from json files
     a json file should have a List of Dicts, see examples:
      [{batch_col:chat_id, utterance_col:[{text_col:message, role_col:role, sort_col:timestamp}]}]
@@ -116,6 +118,8 @@ def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]]
                 key = itemgetter(sort_key)
             elif callable(sort_key):
                 key = sort_key
+            else:
+                raise ValueError("Invalid sort_key provided")
             conversation = sorted(dialogue[utterance_key], key=key)
             text = ""
             roles = ""
@@ -126,14 +130,17 @@ def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]]
                 ut = " ".join(ut) if isinstance(ut, list) else ut
                 conv_role = "__" + utterance[role_key] + "__"
                 text_with_role = conv_role + " " + ut
-                lengths.append(len(tokenize(text_with_role)))
+                if text.strip() != "":
+                    if target_roles is None or utterance[role_key] in target_roles:
+                        example = Example.fromlist([text.strip(), roles.strip(), text_with_role], fields)
+                        example.sl = [i for i in lengths]
+                        # sanity check if the sl is much larger than expected ignore
+                        assert len(lengths) == len(roles.split())
+                        if max(example.sl) < max_sl:
+                            yield example
                 text += " " + text_with_role
                 roles += " " + conv_role
-            example = Example.fromlist([text.strip(), roles.strip()], fields)
-            example.sl = lengths
-            # sanity check if the sl is much larger than expected ignore
-            if max(example.sl) < max_sl:
-                yield example
+                lengths.append(len(tokenize(text_with_role)))
 
 
 class HierarchicalDatasetFromDataFrame(Dataset):
@@ -211,7 +218,8 @@ class HierarchicalDatasetFromFiles(HierarchicalDatasetFromDataFrame):
 class DialogueDataset(Dataset):
 
     def __init__(self, path: Union[Path, str], text_field: Field, utterance_key: str,
-                 text_key: str, role_key: str, sort_key: str, max_sl: int = 1000, reset=False, **kwargs):
+                 text_key: str, role_key: str, sort_key: str, max_sl: int = 1000, reset=False, target_roles=None,
+                 **kwargs):
         """
 
         Args:
@@ -222,6 +230,8 @@ class DialogueDataset(Dataset):
             role_key (str): The name of the key in the json containing the role/name of the person speaking
             sort_key (str): The name of the key in the json that will be used to sort the data of every group
             reset (bool): If true and example pickles exist delete them
+            target_roles (Optional[List[str]]): Optionally the roles that will be targets
+
             **kwargs:
 
             An example json could be like this:
@@ -237,9 +247,10 @@ class DialogueDataset(Dataset):
             ]
         """
         path = Path(path) if isinstance(path, str) else path
-        fields = [("text", text_field), ("roles", text_field)]
+        fields = [("text", text_field), ("roles", text_field), ("response", text_field)]
         iterator = json_to_dialogue_examples(path_dir=path, fields=fields, utterance_key=utterance_key,
-                                             role_key=role_key, text_key=text_key, sort_key=sort_key, max_sl=max_sl
+                                             role_key=role_key, text_key=text_key, sort_key=sort_key, max_sl=max_sl,
+                                             target_roles=target_roles
                                              )
         if path is not None:
             examples_pickle = path / "examples.pickle"

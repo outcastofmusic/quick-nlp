@@ -10,7 +10,7 @@ from torchtext.data import Dataset, Field
 from quicknlp.data.s2s_model_data_loader import EncoderDecoderLearner
 from quicknlp.models import HRED
 from .data_loaders import HierarchicalDataLoader
-from .datasets import DialogueDataset, HierarchicalDatasetFromDataFrame, HierarchicalDatasetFromFiles
+from .datasets import HierarchicalDatasetFromDataFrame, HierarchicalDatasetFromFiles
 from .model_helpers import HREDModel, PrintingMixin
 
 
@@ -168,56 +168,6 @@ class HierarchicalModelData(ModelData, PrintingMixin):
                                                        max_sl=max_sl,
                                                        reset=reset
                                                        )
-        trn_ds = datasets[0]
-        val_ds = datasets[1]
-        test_ds = datasets[2] if len(datasets) == 3 else None
-        return cls(path=path, text_field=text_field, target_names=target_names,
-                   trn_ds=trn_ds, val_ds=val_ds, test_ds=test_ds, bs=bs, sort_key=sort_key, **kwargs)
-
-    @classmethod
-    def from_json_files(cls, path: str, text_field: Field, train: str, validation: str,
-                        text_key: str, utterance_key: str, role_key: str, sort_key_json: Union[Callable, str, str],
-                        test: Optional[str] = None, target_names: Optional[List[str]] = None, bs: Optional[int] = 64,
-                        sort_key: Union[Callable, str] = "sl", max_sl: int = 1000, reset: bool = False,
-                        **kwargs) -> 'HierarchicalModelData':
-        """Method used to instantiate a HierarchicalModelData object that can be used for a supported NLP Task from files
-
-        Args:
-            target_names (Optional[List[str]]): A list of targets to add to the model targets (default is all)
-            path (str): the absolute path in which temporary model data will be saved
-            text_field (Field): A Field to manage the vocab for all the dialogues
-                if multiple fields should use the same vocab, the same field should be passed to them
-            path (str): the absolute path in which temporary model data will be saved
-            train (str):  The path to the training data
-            validation (str):  The path to the test data
-            test (Optional[str]): The path to the test data
-            text_key (str): The name of the column with the text data
-            utterance_key (str): The name of the key with the hierarchical groups, e.g. conversation ids
-            sort_key_json (str): A key to sort the utterances of every dialogue, e.g. timestamps
-            role_key (str): A key with the role of the person saying every text
-            bs (Optional[int]): the batch size
-            sort_key (Union[Callable,str]): A function to sort the examples in batch size based on a field or
-                sl for sorting by sequence length, or cl for sorting by conversation length
-            max_sl (Int): The maximum sequence length allowed when creating examples dialogues with larger sl will be filtered out
-            reset (bool): If true and example pickles exist delete them
-            **kwargs:
-
-        Returns:
-            a HierarchicalModelData instance, which provides datasets for training, validation, testing
-
-        Note:
-            see also the fastai.nlp.LanguageModelData class which inspired this class
-
-        """
-        datasets = DialogueDataset.splits(path=path, train_path=train, val_path=validation,
-                                          test_path=test, text_field=text_field,
-                                          text_key=text_key,
-                                          utterance_key=utterance_key,
-                                          role_key=role_key,
-                                          sort_key=sort_key_json,
-                                          max_sl=max_sl,
-                                          reset=reset,
-                                          )
         trn_ds = datasets[0]
         val_ds = datasets[1]
         test_ds = datasets[2] if len(datasets) == 3 else None

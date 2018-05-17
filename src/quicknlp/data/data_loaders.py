@@ -3,7 +3,7 @@ from typing import Callable, List, Optional, Union
 import torch.cuda as cuda
 from torchtext.data import BucketIterator, Dataset
 
-from quicknlp.data.iterators import HierarchicalIterator
+from quicknlp.data.iterators import HierarchicalIterator, DialogueIterator
 
 
 class S2SDataLoader:
@@ -63,6 +63,43 @@ class HierarchicalDataLoader:
             assert callable(sort_key), "sort_key provided is not a function"
         self.dl = HierarchicalIterator(dataset, batch_size=batch_size, sort_key=sort_key, target_roles=target_names,
                                        max_context_size=max_context_size, **kwargs)
+        self.bs = batch_size
+        self.iter = 0
+
+    def __iter__(self):
+        self.iter = 0
+        for batch in self.dl:
+            if self.iter >= len(self):
+                raise StopIteration
+            yield [batch.context, batch.response, batch.targets]
+            self.iter += 1
+
+    def __len__(self):
+        """number of batches to go through all the data"""
+        return len(self.dl)
+
+
+class DialogueDataLoader:
+    """Loads Hierarchical data into batches, including source and target"""
+
+    def __init__(self, dataset: Dataset, batch_size: int, target_names: Optional[List[str]] = None,
+                 max_context_size: int = 130000, backwards=False,
+                 **kwargs):
+        self.dataset = dataset
+        target_names = [target_names] if isinstance(target_names, str) else target_names
+
+        def sort_key_inner(x):
+            """sort key inner should be utterance size"""
+            return max(x.sl)
+
+        def sort_key_outer(x):
+            """sort key inner should be dialogues size"""
+            return len(x.roles)
+
+        sort_key = sort_key_inner
+        self.dl = DialogueIterator(dataset, batch_size=batch_size, sort_key=sort_key, sort_key_inner=sort_key_inner,
+                                   sort_key_outer=sort_key_outer, target_roles=target_names,
+                                   max_context_size=max_context_size, **kwargs)
         self.bs = batch_size
         self.iter = 0
 
