@@ -236,7 +236,7 @@ class S2SAttentionModelData(S2SModelData):
 
 
 class TransformerModelData(S2SModelData):
-    def get_model(self, opt_fn=None, emb_sz=300, nlayers=2, max_tokens=100, **kwargs):
+    def get_model(self, opt_fn=None, emb_sz=300, nlayers=2, max_tokens=100, nhid=512, num_heads=1, **kwargs):
         if opt_fn is None:
             opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
         m = Transformer(
@@ -246,6 +246,8 @@ class TransformerModelData(S2SModelData):
             pad_token=self.pad_idx,
             eos_token=self.eos_idx,
             max_tokens=max_tokens,
+            ffnhid=nhid,
+            num_head=num_heads,
             **kwargs
         )
         return self.to_model(m, opt_fn)
