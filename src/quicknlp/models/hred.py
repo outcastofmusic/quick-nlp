@@ -116,10 +116,10 @@ class HRED(nn.Module):
         # reset the states for the new batch
         bs = encoder_inputs.size(2)
         self.session_encoder.reset(bs)
-        self.query_encoder.reset(bs)
         query_encoder_raw_outputs, query_encoder_outputs = [], []
         raw_outputs, outputs = [], []
         for index, context in enumerate(encoder_inputs):
+            self.query_encoder.reset(bs)
             raw_outputs, outputs = self.query_encoder(context)  # context has size [sl, bs]
             query_encoder_raw_outputs.append(raw_outputs)  # outputs have size [sl, bs, nhid]
             # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
