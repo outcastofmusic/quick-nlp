@@ -69,7 +69,6 @@ class MultiHeadAttention(Attention):
         self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.linear_out_dim, bias=False)
         self.query_linear = nn.Linear(in_features=query_dim, out_features=self.linear_out_dim, bias=False)
         self.values_linear = nn.Linear(in_features=values_dim, out_features=self.linear_out_dim, bias=False)
-        # self.attention = SDPAttention(self.nhid, p=p)
         self.scale = np.sqrt(self.nhid)
         self.linear = nn.Linear(in_features=self.linear_out_dim, out_features=self.out_dim, bias=False)
 
@@ -88,15 +87,7 @@ class MultiHeadAttention(Attention):
 
         dot = (query_projection * keys_projection).view(sl, bs, self.num_heads, self.nhid).sum(
             dim=-1).contiguous() / self.scale
-        weights = F.log_softmax(dot, dim=0).unsqueeze(-1)
+        weights = F.softmax(dot, dim=0).unsqueeze(-1)
         attention = (weights * values_projection.view(sl, bs, self.num_heads, self.nhid)).sum(0)
         output = self.linear(attention.view(bs, -1))
-        # split the heads and calculate the attentions
-        # query_heads = tr.split(query_projection, split_size=self.nhid, dim=-1)
-        # key_heads = tr.split(keys_projection, split_size=self.nhid, dim=-1)
-        # value_heads = tr.split(values_projection, split_size=self.nhid, dim=-1)
-        # heads = []
-        # for q, k, v in zip(query_heads, key_heads, value_heads):
-        #     heads.append(self.attention(q, k, v))
-        # outputs = tr.cat(heads, dim=-1)
         return assert_dims(output, [bs, self.out_dim])
