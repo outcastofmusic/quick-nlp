@@ -69,7 +69,8 @@ class MultiHeadAttention(Attention):
         self.keys_linear = nn.Linear(in_features=keys_dim, out_features=self.linear_out_dim, bias=False)
         self.query_linear = nn.Linear(in_features=query_dim, out_features=self.linear_out_dim, bias=False)
         self.values_linear = nn.Linear(in_features=values_dim, out_features=self.linear_out_dim, bias=False)
-        self.attention = SDPAttention(self.nhid, p=p)
+        # self.attention = SDPAttention(self.nhid, p=p)
+        self.scale = np.sqrt(self.nhid)
         self.linear = nn.Linear(in_features=self.linear_out_dim, out_features=self.out_dim, bias=False)
 
     def forward(self, query, keys, values):
@@ -81,15 +82,21 @@ class MultiHeadAttention(Attention):
         query_projection = self.query_linear(query)
         sl, bs, dimK = keys.size()
         # [sl, bs, dimH *NH]
-        keys_projection = self.keys_linear(keys.view(-1, keys.size(-1))).view(sl, bs, -1)
+        keys_projection = self.keys_linear(keys)
         # [sl, bs, dimH *NH]
-        values_projection = self.values_linear(values.view(-1, values.size(-1))).view(sl, bs, -1)
+        values_projection = self.values_linear(values)
+
+        dot = (query_projection * keys_projection).view(sl, bs, self.num_heads, self.nhid).sum(
+            dim=-1).contiguous() / self.scale
+        weights = F.log_softmax(dot, dim=0).unsqueeze(-1)
+        attention = (weights * values_projection.view(sl, bs, self.num_heads, self.nhid)).sum(0)
+        output = self.linear(attention.view(bs, -1))
         # split the heads and calculate the attentions
-        query_heads = tr.split(query_projection, split_size=self.nhid, dim=-1)
-        key_heads = tr.split(keys_projection, split_size=self.nhid, dim=-1)
-        value_heads = tr.split(values_projection, split_size=self.nhid, dim=-1)
-        heads = []
-        for q, k, v in zip(query_heads, key_heads, value_heads):
-            heads.append(self.attention(q, k, v))
-        outputs = tr.cat(heads, dim=-1)
-        return assert_dims(self.linear(outputs), [bs, self.out_dim])
+        # query_heads = tr.split(query_projection, split_size=self.nhid, dim=-1)
+        # key_heads = tr.split(keys_projection, split_size=self.nhid, dim=-1)
+        # value_heads = tr.split(values_projection, split_size=self.nhid, dim=-1)
+        # heads = []
+        # for q, k, v in zip(query_heads, key_heads, value_heads):
+        #     heads.append(self.attention(q, k, v))
+        # outputs = tr.cat(heads, dim=-1)
+        return assert_dims(output, [bs, self.out_dim])
