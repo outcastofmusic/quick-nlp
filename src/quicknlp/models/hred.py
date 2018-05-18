@@ -124,6 +124,7 @@ class HRED(nn.Module):
             query_encoder_raw_outputs.append(raw_outputs)  # outputs have size [sl, bs, nhid]
             # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
             # the gradient backpropagation and fit it into memory
+            # to test before adding back
             # out = repackage_var(
             #     outputs[-1]) if num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[
             #     -1]
@@ -133,10 +134,7 @@ class HRED(nn.Module):
         self.decoder.reset(bs)
         state = self.decoder.hidden
         # if there are multiple layers we set the state to the first layer and ignore all others
-        state[0] = self.decoder_state_linear(session_outputs[-1][-1:])
-        #state = concat_bidir_state(self.session_encoder.hidden)
-        #self.decoder.layers[0].cell.module.weight_ih_l0.register_hook(print)
-        #self.decoder_state_linear.weight.register_hook(print)
+        state[0] = F.tanh(self.decoder_state_linear(session_outputs[-1][-1:])) # get the session_output of the last layer and the last step
         raw_outputs_dec, outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
         if num_beams == 0:
             # use output of the projection module

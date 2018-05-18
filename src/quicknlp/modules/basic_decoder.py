@@ -86,6 +86,7 @@ class Decoder(nn.Module):
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
             raw_output, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
                 raw_layer_outputs[layer_index].append(raw_output[layer_index])
