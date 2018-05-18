@@ -96,6 +96,7 @@ class Seq2SeqAttention(Seq2Seq):
         state = self.decoder.hidden
         assert_dims(outputs, [self.nlayers[0], None, bs, (self.nhid[0], self.emb_sz[0])])
         # pass the encoder outputs as keys to the attention projection_layer
+        # self.decoder.layers[0].cell.module.weight_ih_l0.register_hook(print)
         self.decoder.projection_layer.reset(keys=outputs[-1])
         raw_outputs_dec, outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
         # outputs_dec[-1].shape ==  (sl, bs, num_tokens)

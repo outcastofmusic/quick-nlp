@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastai.lm_rnn import repackage_var
 from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNLayers
-from quicknlp.utils import assert_dims, get_kwarg, get_list
+from quicknlp.utils import assert_dims, get_kwarg, get_list, concat_bidir_state
 
 HParam = Union[List[int], int]
 
@@ -111,33 +111,32 @@ class HRED(nn.Module):
                                               out_features=self.decoder.layers[0].output_size)
         self.nt = ntoken[-1]
 
-    def create_decoder_state(self, session_outputs):
-        output = self.decoder_state_linear(session_outputs[-1])
-        return output.unsqueeze_(0).contiguous()
-
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
         bs = encoder_inputs.size(2)
         self.session_encoder.reset(bs)
-        self.decoder.reset(bs)
+        self.query_encoder.reset(bs)
         query_encoder_raw_outputs, query_encoder_outputs = [], []
         raw_outputs, outputs = [], []
-        num_utterances = encoder_inputs.shape[0]
         for index, context in enumerate(encoder_inputs):
-            self.query_encoder.reset(bs)
-            raw_outputs, outputs = self.query_encoder(context)
-            query_encoder_raw_outputs.append(raw_outputs)
+            raw_outputs, outputs = self.query_encoder(context)  # context has size [sl, bs]
+            query_encoder_raw_outputs.append(raw_outputs)  # outputs have size [sl, bs, nhid]
             # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
             # the gradient backpropagation and fit it into memory
-            out = repackage_var(
-                outputs[-1]) if num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[
-                -1]
-            query_encoder_outputs.append(out)
-        query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)
+            # out = repackage_var(
+            #     outputs[-1]) if num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[
+            #     -1]
+            query_encoder_outputs.append(outputs[-1][-1])  # get the last sl output of the query_encoder
+        query_encoder_outputs = torch.stack(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
         raw_outputs_session, session_outputs = self.session_encoder(query_encoder_outputs)
+        self.decoder.reset(bs)
         state = self.decoder.hidden
-        state[0] = self.create_decoder_state(session_outputs[-1])
+        # if there are multiple layers we set the state to the first layer and ignore all others
+        state[0] = self.decoder_state_linear(session_outputs[-1][-1:])
+        #state = concat_bidir_state(self.session_encoder.hidden)
+        #self.decoder.layers[0].cell.module.weight_ih_l0.register_hook(print)
+        #self.decoder_state_linear.weight.register_hook(print)
         raw_outputs_dec, outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
         if num_beams == 0:
             # use output of the projection module

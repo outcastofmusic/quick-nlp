@@ -78,9 +78,12 @@ class RNNLayers(nn.Module):
         self.hidden = new_hidden
         return raw_outputs, outputs
 
+    def reset_hidden(self, bs):
+        self.hidden = [self.layers[l].hidden_state(bs) for l in range(self.nlayers)]
+
     def reset(self, bs):
         self.weights = next(self.parameters()).data
-        self.hidden = [self.layers[l].hidden_state(bs) for l in range(self.nlayers)]
+        self.reset_hidden(bs)
 
     def hidden_shape(self, bs):
         if isinstance(self.layers[0].hidden_state(1), tuple):
