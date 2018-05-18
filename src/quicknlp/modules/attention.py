@@ -30,7 +30,7 @@ class Attention(nn.Module):
 class MLPAttention(Attention):
     """Multilayer Perceptron Attention Bandandau et al. 2015"""
 
-    def __init__(self, n_in, nhid):
+    def __init__(self, n_in, nhid, p=0.0):
         """
 
         Args:
@@ -38,7 +38,7 @@ class MLPAttention(Attention):
                     the sum of the keys and query dims
             nhid (int): The dimension of the internal prediction.
         """
-        super(MLPAttention, self).__init__()
+        super().__init__(p=p)
         self.linear1 = nn.Linear(in_features=n_in, out_features=nhid, bias=False)
         self.linear2 = nn.Linear(in_features=nhid, out_features=1, bias=False)
 
@@ -47,21 +47,30 @@ class MLPAttention(Attention):
         return self.linear2(F.tanh(self.linear1(input)))
 
 
-class SDPAttention(Attention):
+class SDPAttention(nn.Module):
     """Scaled Dot Product Attention Vaswani et al. 2017"""
 
     def __init__(self, n_in, p=0.0):
-        super(SDPAttention, self).__init__(p=p)
+        super().__init__()
+        self.dropout = LockedDropout(p) if p > 0.0 else None
         self.scale = np.sqrt(n_in)
 
-    def score(self, query, key):
-        return (query * key).sum(dim=-1).view(-1, 1) / self.scale
+    def forward(self, query, keys, values):
+        # Query dim [bs, dimQ]
+        # keys dim [sl, bs, dimK]
+        # values dim [sl, bs, dimV]
+        dot = (query * keys).sum(dim=-1) / self.scale
+        weights = F.softmax(dot, dim=0).unsqueeze(-1)
+        if self.dropout is not None:
+            weights = self.dropout(weights)
+        return (weights * values).sum(0)
 
 
-class MultiHeadAttention(Attention):
+class MultiHeadAttention(nn.Module):
 
     def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim, p=0.0, out_dim=None):
         super().__init__()
+        self.dropout = LockedDropout(p) if p > 0.0 else None
         self.num_heads = num_heads
         self.nhid = nhid
         self.linear_out_dim = self.nhid * num_heads
@@ -87,7 +96,9 @@ class MultiHeadAttention(Attention):
 
         dot = (query_projection * keys_projection).view(sl, bs, self.num_heads, self.nhid).sum(
             dim=-1).contiguous() / self.scale
-        weights = F.softmax(dot, dim=0).unsqueeze(-1)
-        attention = (weights * values_projection.view(sl, bs, self.num_heads, self.nhid)).sum(0)
+        weights = F.softmax(dot, dim=0)
+        if self.dropout is not None:
+            weights = self.dropout(weights)
+        attention = (weights.unsqueeze(-1) * values_projection.view(sl, bs, self.num_heads, self.nhid)).sum(0)
         output = self.linear(attention.view(bs, -1))
         return assert_dims(output, [bs, self.out_dim])
