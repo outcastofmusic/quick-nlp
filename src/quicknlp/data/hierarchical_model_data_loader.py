@@ -180,7 +180,7 @@ class HierarchicalModelData(ModelData, PrintingMixin):
 
     def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, **kwargs):
         if opt_fn is None:
-            opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+            opt_fn = partial(optim.Adam, betas=(0.8, 0.99))
         m = HRED(
             ntoken=self.nt,
             emb_sz=emb_sz,

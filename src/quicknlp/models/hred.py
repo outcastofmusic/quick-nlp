@@ -25,7 +25,7 @@ def s2sloss(input, target, pad_idx, *args, **kwargs):
 class HRED(nn.Module):
     """Basic HRED model"""
 
-    BPTT_MAX_UTTERANCES = 20
+    BPTT_MAX_UTTERANCES = 1000
 
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
@@ -118,6 +118,7 @@ class HRED(nn.Module):
         self.session_encoder.reset(bs)
         query_encoder_raw_outputs, query_encoder_outputs = [], []
         raw_outputs, outputs = [], []
+        num_utterances, max_sl, *_ = encoder_inputs.size()
         for index, context in enumerate(encoder_inputs):
             self.query_encoder.reset(bs)
             raw_outputs, outputs = self.query_encoder(context)  # context has size [sl, bs]
@@ -125,10 +126,8 @@ class HRED(nn.Module):
             # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
             # the gradient backpropagation and fit it into memory
             # to test before adding back
-            # out = repackage_var(
-            #     outputs[-1]) if num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[
-            #     -1]
-            query_encoder_outputs.append(outputs[-1][-1])  # get the last sl output of the query_encoder
+            out = repackage_var( outputs[-1][-1]) if max_sl * num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[-1][-1]
+            query_encoder_outputs.append(out)  # get the last sl output of the query_encoder
         query_encoder_outputs = torch.stack(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
         raw_outputs_session, session_outputs = self.session_encoder(query_encoder_outputs)
         self.decoder.reset(bs)
