@@ -57,3 +57,19 @@ def test_MultiHeadAttention(attention_setup):
 
     result = attention(query=V(query), keys=V(keys), values=V(keys))
     assert_dims(result, [bs, num_heads * nhid])
+
+
+def test_MultiHeadAttention_with_mask(attention_setup):
+    keys, query = attention_setup
+    bs = query.size(0)
+    ed = keys.size(2)
+    sl = keys.size(0)
+    eq = query.size(1)
+    num_heads = 4
+    nhid = 10
+    attention = to_gpu(
+        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ed, query_dim=eq, values_dim=ed, dropout=0.3))
+    mask = V(T(np.zeros((sl, bs, num_heads))))
+    mask[0] = 1
+    result = attention(query=V(query), keys=V(keys), values=V(keys), mask=mask)
+    assert_dims(result, [bs, num_heads * nhid])

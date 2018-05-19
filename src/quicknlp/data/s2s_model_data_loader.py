@@ -246,7 +246,7 @@ class TransformerModelData(S2SModelData):
             pad_token=self.pad_idx,
             eos_token=self.eos_idx,
             max_tokens=max_tokens,
-            ffnhid=nhid,
+            nhid=nhid,
             num_head=num_heads,
             **kwargs
         )

@@ -19,12 +19,12 @@ class Transformer(nn.Module):
 
         dropout = get_kwarg(kwargs, name="dropout", default_value=0.1)
         num_heads = get_kwarg(kwargs, name="num_heads", default_value=8)
-        ffnhid = get_kwarg(kwargs, name="ffnhid", default_value=2048)
+        nhid = get_kwarg(kwargs, name="nhid", default_value=2048)
 
         encoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[0], emb_size=emb_size, dropout=dropout,
                                                         pad_token=pad_token)
         encoder_layer = TransformerEncoderLayers(num_layers=nlayers, in_dim=emb_size, num_heads=num_heads,
-                                                 nhid=ffnhid)
+                                                 nhid=nhid)
         self.encoder = Encoder(embedding_layer=encoder_embedding_layer, encoder_layer=encoder_layer)
 
         if share_embedding_layer:
@@ -33,7 +33,7 @@ class Transformer(nn.Module):
             decoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[-1], emb_size=emb_size, dropout=dropout,
                                                             pad_token=pad_token)
 
-        decoder_layer = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size, num_heads=num_heads, nhid=ffnhid)
+        decoder_layer = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size, num_heads=num_heads, nhid=nhid)
         projection_layer = Projection(out_dim=ntokens[-1], in_dim=emb_size, dropout=dropout,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )

@@ -1,5 +1,6 @@
 import torch as tr
 import torch.nn as nn
+from fastai.core import V
 
 from quicknlp.utils import assert_dims, get_list
 from .attention import MultiHeadAttention
@@ -39,16 +40,23 @@ class AttentionLayer(nn.Module):
         super().__init__()
         self.in_dim = in_dim
         self.nhid = in_dim // num_heads
+        self.num_heads = num_heads
         self.attention = MultiHeadAttention(num_heads=num_heads, nhid=self.nhid, out_dim=self.in_dim,
                                             keys_dim=self.in_dim, values_dim=self.in_dim, query_dim=self.in_dim,
                                             dropout=dropout)
 
-    def forward(self, input_tensor, keys_vector, values_vector):
+    def forward(self, input_tensor, keys_vector, values_vector, mask=False):
         self_attention_outputs = []
+        sl, bs, _ = keys_vector.size()
         for index, input_step in enumerate(input_tensor, 1):
+            if mask:
+                mask_ = V(tr.zeros(sl, bs, self.num_heads))
+                mask_[:index] = 1
+            else:
+                mask_ = None
             self_attention_outputs.append(
                 self.attention(query=input_step, keys=keys_vector,
-                               values=values_vector))  # dims [bs, dims]
+                               values=values_vector, mask=mask_))  # dims [bs, dims]
         return tr.stack(self_attention_outputs, dim=0)  # dims [sl, bs, dims]
 
 
@@ -98,15 +106,19 @@ class TransformerLayerDecoder(TransformerLayer):
 
     def forward(self, *inputs):
         encoder_input, decoder_input = assert_dims(inputs, [2, None, None, self.in_dim])
-        sl, bs, in_dim = decoder_input.size()
-        steps = []
-        for index in range(1, sl + 1):
-            att_output = self.sublayers[0](decoder_input[:index], lambda x: self.attention(x, x, x))
-            dec_att_output = self.sublayers[1](att_output,
-                                               lambda x: self.decoder_attention(x, encoder_input, encoder_input))
-            ff_output = self.sublayers[2](dec_att_output[-1], self.linear)
-            steps.append(ff_output)
-        return tr.stack(steps, dim=0)
+        att_output = self.sublayers[0](decoder_input, lambda x: self.attention(x, x, x, mask=True))
+        dec_att_output = self.sublayers[1](att_output,
+                                           lambda x: self.decoder_attention(x, encoder_input, encoder_input))
+        return self.sublayers[2](dec_att_output, self.linear)
+        # sl, bs, in_dim = decoder_input.size()
+        # steps = []
+        # for index in range(1, sl + 1):
+        #     att_output = self.sublayers[0](decoder_input[:index], lambda x: self.attention(x, x, x))
+        #     dec_att_output = self.sublayers[1](att_output,
+        #                                        lambda x: self.decoder_attention(x, encoder_input, encoder_input))
+        #     ff_output = self.sublayers[2](dec_att_output[-1], self.linear)
+        #     steps.append(ff_output)
+        # return tr.stack(steps, dim=0)
 
 
 class TransformerDecoderLayers(nn.Module):

@@ -81,7 +81,7 @@ class MultiHeadAttention(nn.Module):
         self.scale = np.sqrt(self.nhid)
         self.linear = nn.Linear(in_features=self.linear_out_dim, out_features=self.out_dim, bias=False)
 
-    def forward(self, query, keys, values):
+    def forward(self, query, keys, values, mask=None):
         # Query dim [bs, dimQ]
         # keys dim [sl, bs, dimK]
         # values dim [sl, bs, dimV]
@@ -94,9 +94,11 @@ class MultiHeadAttention(nn.Module):
         # [sl, bs, dimH *NH]
         values_projection = self.values_linear(values)
 
-        dot = (query_projection * keys_projection).view(sl, bs, self.num_heads, self.nhid).sum(
+        scores = (query_projection * keys_projection).view(sl, bs, self.num_heads, self.nhid).sum(
             dim=-1).contiguous() / self.scale
-        weights = F.softmax(dot, dim=0)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e20)
+        weights = F.softmax(scores, dim=0)
         if self.dropout is not None:
             weights = self.dropout(weights)
         attention = (weights.unsqueeze(-1) * values_projection.view(sl, bs, self.num_heads, self.nhid)).sum(0)

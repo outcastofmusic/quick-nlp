@@ -2,8 +2,8 @@ import torch as tr
 from fastai.core import T, V, to_gpu
 
 from quicknlp.modules.layer_norm import LayerNorm
-from quicknlp.modules.transformer import TransformerDecoderLayers, TransformerEncoderLayers, TransformerLayer, \
-    TransformerLayerDecoder
+from quicknlp.modules.transformer import AttentionLayer, TransformerDecoderLayers, TransformerEncoderLayers, \
+    TransformerLayer, TransformerLayerDecoder
 from quicknlp.utils import assert_dims
 
 
@@ -15,6 +15,26 @@ def test_layer_norm():
     layernorm = LayerNorm(in_features)
     outputs = layernorm(inputs)
     assert_dims(outputs, [sl, bs, in_features])
+
+
+def test_attention_layer():
+    sl = 2
+    bs = 2
+    in_features = 32
+    tr.random.manual_seed(0)
+    inputs = to_gpu(V(tr.randn([sl, bs, in_features])))
+    layer = AttentionLayer(in_dim=32, num_heads=4, dropout=0.0)
+    outputs1 = layer(inputs, inputs, inputs, mask=True)
+    assert_dims(outputs1, [sl, bs, in_features])
+
+    outputs2 = layer(inputs[:1], inputs[:1], inputs[:1])
+    assert_dims(outputs2, [1, bs, in_features])
+    assert ((outputs1[0] - outputs2[0]).abs() < 1E-6).all()
+
+    outputs = layer(inputs, inputs, inputs, mask=False)
+    assert_dims(outputs, [sl, bs, in_features])
+    assert (outputs[0] != outputs1[0]).all()
+    assert (outputs[0] != outputs2[0]).all()
 
 
 def test_transfomer_layer():
@@ -42,7 +62,7 @@ def test_transfomer_layer_decoder():
     assert_dims(outputs, [sl, bs, in_features])
     outputs1 = transformer(encoder_inputs, decoder_inputs[:1])
     assert_dims(outputs1, [1, bs, in_features])
-    assert (outputs[0] == outputs1[0]).all()
+    assert ((outputs[0] - outputs1[0]).abs() < 1E-6).all()
 
 
 def test_transformer_encoder():
@@ -75,4 +95,4 @@ def test_transformer_decoder_layers():
     layer_outputs2 = transformer(inputs[:1], encoder_inputs)
     assert_dims(layer_outputs2, [num_layers, 1, bs, in_features])
     for layer1, layer2 in zip(layer_outputs, layer_outputs2):
-        assert (layer1[0] == layer2[0]).all()
+        assert ((layer1[0] - layer2[0]).abs() < 1E-6).all()
