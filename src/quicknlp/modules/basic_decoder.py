@@ -193,6 +193,15 @@ class TransformerDecoder(Decoder):
         super().__init__(decoder_layer=decoder_layer, projection_layer=projection_layer, max_tokens=max_tokens,
                          eos_token=eos_token, pad_token=pad_token, embedding_layer=embedding_layer)
 
+    def _train_forward(self, inputs, hidden=None):
+        inputs = self.embedding_layer(inputs)
+        # outputs are the outputs of every layer
+        outputs = self.decoder_layer(inputs, hidden)
+        # we project only the output of the last layer
+        if self.projection_layer is not None:
+            outputs[-1] = self.projection_layer(outputs[-1])
+        return outputs
+
     def _greedy_forward(self, inputs, hidden=None):
         inputs = inputs[:1]  # inputs should be only first token initially [1,bs]
         sl, bs = inputs.size()
@@ -202,7 +211,7 @@ class TransformerDecoder(Decoder):
         layer_outputs = [[] for _ in range(self.nlayers)]
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
-            _, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            output = self.forward(inputs, hidden=hidden, num_beams=0)
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
 
@@ -232,7 +241,7 @@ class TransformerDecoder(Decoder):
         hidden = repeat_cell_state(hidden, num_beams)
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs * num_beams, layer_dim], ...] sl should be one
-            _, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            output = self.forward(inputs, hidden=hidden, num_beams=0)
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
 

@@ -150,14 +150,14 @@ def test_transformer_decoder(num_beams, decoder_inputs_transformer):
                                       pad_token=1)
 
     encoder = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size,
-                                       num_heads=2, ffnhid=emb_size)
+                                       num_heads=2, nhid=emb_size)
     projection_layer = Projection(out_dim=ntokens,
                                   in_dim=emb_size, tie_encoder=None, dropout=0.0)
     decoder = TransformerDecoder(decoder_layer=encoder, projection_layer=projection_layer, pad_token=1, eos_token=2,
                                  max_tokens=max_tokens,
                                  embedding_layer=embedding)
     decoder = to_gpu(decoder)
-    raw_outputs, outputs = decoder(vin, ven, num_beams=num_beams)
+    outputs = decoder(vin, ven, num_beams=num_beams)
     if num_beams > 0:
         assert_dims(outputs,
                     [nlayers, None, num_beams * batch_size, (emb_size, ntokens)])

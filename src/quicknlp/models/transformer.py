@@ -24,7 +24,7 @@ class Transformer(nn.Module):
         encoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[0], emb_size=emb_size, dropout=dropout,
                                                         pad_token=pad_token)
         encoder_layer = TransformerEncoderLayers(num_layers=nlayers, in_dim=emb_size, num_heads=num_heads,
-                                                 ffnhid=ffnhid)
+                                                 nhid=ffnhid)
         self.encoder = Encoder(embedding_layer=encoder_embedding_layer, encoder_layer=encoder_layer)
 
         if share_embedding_layer:
@@ -33,7 +33,7 @@ class Transformer(nn.Module):
             decoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[-1], emb_size=emb_size, dropout=dropout,
                                                             pad_token=pad_token)
 
-        decoder_layer = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size, num_heads=num_heads, ffnhid=ffnhid)
+        decoder_layer = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size, num_heads=num_heads, nhid=ffnhid)
         projection_layer = Projection(out_dim=ntokens[-1], in_dim=emb_size, dropout=dropout,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )
@@ -55,8 +55,8 @@ class Transformer(nn.Module):
 
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         sl, bs = encoder_inputs.size()
-        _, encoder_outputs = self.encoder(encoder_inputs)
-        _, decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
+        encoder_outputs = self.encoder(encoder_inputs)
+        decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
         if num_beams == 0:
             # use output of the projection module
             predictions = assert_dims(decoder_outputs[-1], [None, bs, self.nt])  # dims: [sl, bs, nt]

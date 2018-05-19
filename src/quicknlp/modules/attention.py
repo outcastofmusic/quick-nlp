@@ -68,9 +68,9 @@ class SDPAttention(nn.Module):
 
 class MultiHeadAttention(nn.Module):
 
-    def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim, p=0.0, out_dim=None):
+    def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim, dropout=0.0, out_dim=None):
         super().__init__()
-        self.dropout = LockedDropout(p) if p > 0.0 else None
+        self.dropout = LockedDropout(dropout) if dropout > 0.0 else None
         self.num_heads = num_heads
         self.nhid = nhid
         self.linear_out_dim = self.nhid * num_heads
