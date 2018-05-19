@@ -110,15 +110,6 @@ class TransformerLayerDecoder(TransformerLayer):
         dec_att_output = self.sublayers[1](att_output,
                                            lambda x: self.decoder_attention(x, encoder_input, encoder_input))
         return self.sublayers[2](dec_att_output, self.linear)
-        # sl, bs, in_dim = decoder_input.size()
-        # steps = []
-        # for index in range(1, sl + 1):
-        #     att_output = self.sublayers[0](decoder_input[:index], lambda x: self.attention(x, x, x))
-        #     dec_att_output = self.sublayers[1](att_output,
-        #                                        lambda x: self.decoder_attention(x, encoder_input, encoder_input))
-        #     ff_output = self.sublayers[2](dec_att_output[-1], self.linear)
-        #     steps.append(ff_output)
-        # return tr.stack(steps, dim=0)
 
 
 class TransformerDecoderLayers(nn.Module):
