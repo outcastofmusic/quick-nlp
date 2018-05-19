@@ -7,6 +7,7 @@ from operator import itemgetter
 from pathlib import Path
 from typing import Iterator, List, Optional, Tuple, Union
 
+import numpy as np
 import pandas as pd
 from torchtext.data import Dataset, Example, Field
 from tqdm import tqdm
@@ -104,7 +105,7 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
 def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]], utterance_key: str, role_key: str,
                               text_key: str, sort_key: str, max_sl: int = 1000,
                               target_roles: Optional[List[str]] = None) -> \
-        Iterator[Example]:
+    Iterator[Example]:
     """Load dialogues from json files
     a json file should have a List of Dicts, see examples:
      [{batch_col:chat_id, utterance_col:[{text_col:message, role_col:role, sort_col:timestamp}]}]
@@ -275,3 +276,58 @@ class DialogueDataset(Dataset):
         test_data = None if test_path is None else cls(path=path / test_path, max_sl=max_sl, **kwargs)
 
         return tuple(d for d in (train_data, val_data, test_data) if d is not None)
+
+
+class ContextResponseDataset(Dataset):
+    def __init__(self, context: List[int], response: List[int], label: Optional[int] = None, backwards=False,
+                 sos: Optional[int] = None,
+                 eos: Optional[int] = None):
+        self.c, self.r, self.l, self.backwards, self.sos, self.eos = context, response, label, backwards, sos, eos
+
+    def __getitem__(self, idx):
+        x = self.c[idx]
+        y = self.r[idx]
+        label = None if self.label is None else self.l[idx]
+        if self.backwards: x = list(reversed(x))
+        if self.eos is not None:
+            x = x + [self.eos]
+            y = y + [self.eos]
+        if self.sos is not None:
+            x = [self.sos] + x
+            y = [self.sos] + y
+        if label is None:
+            return np.array(x), np.array(y)
+        else:
+            return np.array(x), np.array(y), label
+
+    def __len__(self):
+        return len(self.x)
+
+
+class DialDataset(Dataset):
+    def __init__(self, context: List[List[int]], response: List[int], pad: int, label: Optional[int] = None,
+                 backwards=False,
+                 sos: Optional[int] = None,
+                 eos: Optional[int] = None,
+                 ):
+        self.c, self.r, self.l, self.backwards, self.sos, self.eos, self.pad = context, response, label, backwards, sos, eos, pad
+
+    def __getitem__(self, idx):
+        x = self.c[idx]
+        y = self.r[idx]
+        if self.backwards: x = [list(reversed(i)) for i in x]
+        if self.eos is not None:
+            x = [i + [self.eos] for i in x]
+            y = y + [self.eos]
+        if self.sos is not None:
+            x = [[self.sos] + i for i in x]
+            y = [self.sos] + y
+
+        max_sl = max([len(i) for i in x])
+        x_padded = np.zeros((len(x), max_sl), dtype=np.int64)
+        for i, row in enumerate(x):
+            x_padded[i, :len(row)] = row
+        return x_padded, np.array(y)
+
+    def __len__(self):
+        return len(self.c)

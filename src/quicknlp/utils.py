@@ -19,6 +19,11 @@ States = List[Tuple[torch.Tensor, torch.Tensor]]
 HParam = Union[List[int], int]
 
 
+def accuracy(preds, targs):
+    preds = torch.max(preds, dim=-1)[1]
+    return (preds[:-1] == targs.data).float().mean()
+
+
 def concat_bidir_state(states: States) -> States:
     state = []
     for layer in states:
@@ -68,6 +73,7 @@ def print_features(modeldata: ModelData, num_batches=1, num_sentences=-1):
                 break
         if 0 < num_batches <= batch_num - 1:
             break
+
 
 def print_batch(learner: Learner, modeldata: ModelData, input_field, output_field, num_batches=1, num_sentences=-1,
                 is_test=False, num_beams=1):
