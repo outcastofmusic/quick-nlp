@@ -135,7 +135,7 @@ class HREDModelData(ModelData, PrintingMixin):
         return self.to_model(m, opt_fn)
 
 
-class CVAModelData(HREDModelData):
+class CVAEModelData(HREDModelData):
 
     def to_model(self, m, opt_fn):
         model = CVAEModel(to_gpu(m))
