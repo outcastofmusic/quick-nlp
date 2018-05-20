@@ -141,7 +141,7 @@ class CVAEModelData(HREDModelData):
     def to_model(self, m, opt_fn):
         model = CVAEModel(to_gpu(m))
         learner = EncoderDecoderLearner(self, model, opt_fn=opt_fn)
-        learner.crit = cvae_loss  # change loss to auxilliary loss
+        learner.crit = partial(cvae_loss, pad_idx=learner.data.pad_idx)  # change loss to auxilliary loss
         return learner
 
     def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, latent_dim=100, bow_nhid=400,
