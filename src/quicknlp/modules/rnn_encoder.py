@@ -25,9 +25,9 @@ class RNNLayers(nn.Module):
         Args:
             in_dim (int): the dimension of the input vectors
             out_dim (int) the dimension of the output vectors
-            nhid (int): number of hidden activation per LSTM layer
-            nlayers (int): number of LSTM layers to use in the architecture
-            dropouth (float): dropout to apply to the activations going from one LSTM layer to another
+            nhid (int): number of hidden activation per layer
+            nlayers (int): number of layers to use in the architecture
+            dropouth (float): dropout to apply to the activations going from one  layer to another
             wdrop (float): dropout used for a LSTM's internal (or hidden) recurrent weights.
             cell_type (str): Type of cell (default is LSTM)
         """
@@ -40,7 +40,7 @@ class RNNLayers(nn.Module):
                                                      nhid=nhid, bidir=bidir)
             self.layers.append(
                 Cell(cell_type=cell_type, input_size=input_size, output_size=output_size,
-                     bidir=bidir, dropouth=dropouth, wdrop=wdrop)
+                     bidir=bidir, dropouth=0.0, wdrop=wdrop, nlayers=1)
             )
 
         self.layers = nn.ModuleList(self.layers)
@@ -62,21 +62,20 @@ class RNNLayers(nn.Module):
             The outputs should have dims [sl,bs,layer_dims]
         """
         # we reset at very batch as they are not sequential (like a languagemodel)
-        raw_output = input_tensor
+        output = input_tensor
         self.hidden = self.hidden if hidden is None else hidden
-        new_hidden, raw_outputs, outputs = [], [], []
+        new_hidden, outputs = [], []
         for layer_index, (rnn, drop) in enumerate(zip(self.layers, self.dropouths)):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                raw_output, new_h = rnn(raw_output, self.hidden[layer_index])
+                output, new_h = rnn(output, self.hidden[layer_index])
             new_hidden.append(new_h)
-            raw_outputs.append(raw_output)
             if layer_index != self.nlayers - 1:
-                raw_output = drop(raw_output)
-            outputs.append(raw_output)
+                output = drop(output)
+            outputs.append(output)
 
         self.hidden = new_hidden
-        return raw_outputs, outputs
+        return outputs
 
     def reset_hidden(self, bs):
         self.hidden = [self.layers[l].hidden_state(bs) for l in range(self.nlayers)]

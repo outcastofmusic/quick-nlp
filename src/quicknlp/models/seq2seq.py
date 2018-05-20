@@ -88,13 +88,13 @@ class Seq2Seq(nn.Module):
         bs = encoder_inputs.size(1)
         self.encoder.reset(bs)
         self.decoder.reset(bs)
-        raw_outpus, outputs = self.encoder(encoder_inputs)
+        outputs = self.encoder(encoder_inputs)
         state = concat_bidir_state(self.encoder.encoder_layer.hidden)
-        raw_outputs_dec, outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
+        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
         if num_beams == 0:
             # use output of the projection module
             predictions = assert_dims(outputs_dec[-1], [None, bs, self.nt])  # dims: [sl, bs, nt]
         else:
             # use argmax or beam search predictions
             predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
-        return predictions, [*raw_outpus, *raw_outputs_dec], [*outputs, *outputs_dec]
+        return predictions, [*outputs, *outputs_dec]

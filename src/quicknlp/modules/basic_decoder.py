@@ -69,11 +69,11 @@ class Decoder(nn.Module):
     def _train_forward(self, inputs, hidden=None):
         inputs = self.embedding_layer(inputs)
         # outputs are the outputs of every layer
-        raw_outputs, outputs = self.decoder_layer(inputs, hidden)
+        outputs = self.decoder_layer(inputs, hidden)
         # we project only the output of the last layer
         if self.projection_layer is not None:
             outputs[-1] = self.projection_layer(outputs[-1])
-        return raw_outputs, outputs
+        return outputs
 
     def _greedy_forward(self, inputs, hidden=None):
         inputs = inputs[:1]  # inputs should be only first token initially [1,bs]
@@ -82,14 +82,12 @@ class Decoder(nn.Module):
         iteration = 0
         self.beam_outputs = inputs.clone()
         layer_outputs = [[] for _ in range(self.nlayers)]
-        raw_layer_outputs = [[] for _ in range(self.nlayers)]
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
-            raw_output, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            output = self.forward(inputs, hidden=hidden, num_beams=0)
             hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
-                raw_layer_outputs[layer_index].append(raw_output[layer_index])
 
             #  inputs are the indices  dims [1,bs]
             _, inputs = output[-1].max(dim=-1)
@@ -101,9 +99,8 @@ class Decoder(nn.Module):
 
         self.beam_outputs = self.beam_outputs.view(-1, bs, 1)
         # ensure the outputs are a list of layers where each layer is [sl,bs,layerdim]
-        raw_outputs = [torch.cat(i, dim=0) for i in raw_layer_outputs]
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
-        return raw_outputs, outputs
+        return outputs
 
     def _topk_forward(self, inputs, hidden, num_beams):
         sl, bs = inputs.size()
@@ -113,16 +110,14 @@ class Decoder(nn.Module):
         finished = to_gpu(torch.zeros(bs * num_beams).byte())
         iteration = 0
         layer_outputs = [[] for _ in range(self.nlayers)]
-        raw_layer_outputs = [[] for _ in range(self.nlayers)]
         self.beam_outputs = inputs.clone()
         hidden = repeat_cell_state(hidden, num_beams)
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs * num_beams, layer_dim], ...] sl should be one
-            raw_output, output = self.forward(inputs, hidden=hidden, num_beams=0)
+            output = self.forward(inputs, hidden=hidden, num_beams=0)
             hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
-                raw_layer_outputs[layer_index].append(raw_output[layer_index])
 
             # we take the output of the last layer with dims [1, bs, output_dim]
             # and get the indices of th top k for every bs
@@ -149,10 +144,9 @@ class Decoder(nn.Module):
             iteration += 1
 
         # ensure the outputs are a list of layers where each layer is [sl,bs,layerdim]
-        raw_outputs = [torch.cat(i, dim=0) for i in raw_layer_outputs]
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         self.beam_outputs = self.beam_outputs.view(-1, bs, num_beams)
-        return raw_outputs, outputs
+        return outputs
 
     def mask_logprobs(self, bs, finished, iteration, logprobs, new_logprobs, num_beams, num_tokens):
         if iteration == 0:

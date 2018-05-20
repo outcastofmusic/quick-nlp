@@ -113,7 +113,7 @@ def test_rnn_decoder(rnn_decoder, decoder_inputs):
     decoder.reset(params.batch_size)
     hidden = decoder.hidden
     decoder.projection_layer.keys = keys
-    raw_outputs, outputs = decoder(dec_ins, hidden=hidden, num_beams=params.num_beams)
+    outputs = decoder(dec_ins, hidden=hidden, num_beams=params.num_beams)
     assert params.nlayers == len(outputs)
     if params.num_beams > 0:
         assert_dims(outputs,

@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch
 from fastai.core import to_gpu, V
 from fastai.learner import Learner
@@ -5,6 +7,7 @@ from fastai.torch_imports import save_model, load_model
 from torch.nn import functional as F
 
 from quicknlp.data.model_helpers import predict_with_seq2seq
+from quicknlp.stepper import S2SStepper
 
 
 def decoder_loss(input, target, pad_idx, *args, **kwargs):
@@ -58,6 +61,7 @@ class EncoderDecoderLearner(Learner):
     def __init__(self, data, models, **kwargs):
         super().__init__(data, models, **kwargs)
         self.crit = self.s2sloss
+        self.fit_gen = partial(self.fit_gen, stepper=S2SStepper)
 
     def save_encoder(self, name):
         save_model(self.model[0], self.get_model_path(name))
