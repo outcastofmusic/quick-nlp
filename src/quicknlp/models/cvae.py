@@ -11,37 +11,6 @@ from .hred import HRED
 HParam = Union[List[int], int]
 
 
-def gaussian_kld(recog_mu, recog_logvar, prior_mu, prior_logvar):
-    kld = -0.5 * torch.sum(
-        1 + recog_logvar - prior_logvar - (prior_mu - recog_mu).pow(2).div(torch.exp(prior_logvar))
-        - torch.exp(recog_logvar).div(torch.exp(prior_logvar)))
-    return kld
-
-
-def cvae_loss(input, target, pad_idx, *args, **kwargs):
-    predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits = input
-    vocab = predictions.size(-1)
-    # dims are sq-1 times bs times vocab
-    dec_input = predictions[:target.size(0)].view(-1, vocab).contiguous()
-    bow_targets = torch.zeros_like(bow_logits).scatter(1, target.transpose(1,0),1)
-    mask = torch.zeros_like(bow_logits)
-    # ignore pad_idx in training
-    mask[:,pad_idx]= -1e30
-    bow_logits = bow_logits + mask
-    bow_targets[:,pad_idx]=0
-    bow_loss = F.binary_cross_entropy_with_logits(bow_logits, bow_targets,*args, **kwargs)
-    # targets are sq-1 times bs (one label for every word)
-    # TODO implement kld annealing
-    kld_weight = kwargs.pop('kld_weight', 1.)
-    kld_loss = gaussian_kld(recog_mu, recog_log_var, prior_mu, prior_log_var)
-    target = target.view(-1).contiguous()
-    decoder_loss = F.cross_entropy(input=dec_input,
-                                   target=target,
-                                   ignore_index=pad_idx,
-                                   *args, **kwargs)
-    return decoder_loss + bow_loss + kld_loss * kld_weight
-
-
 class CVAE(HRED):
     """Basic CVAE model see:
     T. Zhao, R. Zhao, and M. Eskenazi, “Learning Discourse-level Diversity for Neural Dialog Models using Conditional Variational Autoencoders,” arXiv.org, vol. cs.CL. 31-Mar-2017.
@@ -150,6 +119,8 @@ class CVAE(HRED):
             # use argmax or beam search predictions
             predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
         if num_beams == 0:
-            return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits],[*raw_outputs, *raw_outputs_dec], [*outputs, *outputs_dec]
+            return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*raw_outputs,
+                                                                                                 *raw_outputs_dec], [
+                       *outputs, *outputs_dec]
         else:
             return predictions, [*raw_outputs, *raw_outputs_dec], [*outputs, *outputs_dec]

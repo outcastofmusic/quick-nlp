@@ -93,6 +93,7 @@ class Seq2SeqAttention(Seq2Seq):
         self.encoder.reset(bs)
         self.decoder.reset(bs)
         raw_outpus, outputs = self.encoder(encoder_inputs)
+        # as initial state we use the initial decoder state (zeros)
         state = self.decoder.hidden
         assert_dims(outputs, [self.nlayers[0], None, bs, (self.nhid[0], self.emb_sz[0])])
         # pass the encoder outputs as keys to the attention projection_layer

@@ -3,7 +3,7 @@ from fastai.core import V, to_gpu
 from torch.optim import Adam
 
 from quicknlp.data.model_helpers import S2SModel
-from quicknlp.data.s2s_model_data_loader import decoder_loss
+from quicknlp.data.learners import decoder_loss
 from quicknlp.models import Seq2Seq
 from quicknlp.models.seq2seq_attention import Seq2SeqAttention
 from quicknlp.utils import get_trainable_parameters

@@ -4,7 +4,7 @@ from torch.optim import Adam
 
 from quicknlp.data.model_helpers import CVAEModel
 from quicknlp.models import CVAE
-from quicknlp.models.cvae import cvae_loss
+from quicknlp.data.learners import cvae_loss
 from quicknlp.utils import get_trainable_parameters
 
 params = [(True), (False)]

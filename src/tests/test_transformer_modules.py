@@ -12,7 +12,7 @@ def test_layer_norm():
     bs = 2
     in_features = 32
     inputs = to_gpu(V(tr.randn([sl, bs, in_features])))
-    layernorm = LayerNorm(in_features)
+    layernorm = to_gpu(LayerNorm(in_features))
     outputs = layernorm(inputs)
     assert_dims(outputs, [sl, bs, in_features])
 
@@ -23,7 +23,7 @@ def test_attention_layer():
     in_features = 32
     tr.random.manual_seed(0)
     inputs = to_gpu(V(tr.randn([sl, bs, in_features])))
-    layer = AttentionLayer(in_dim=32, num_heads=4, dropout=0.0)
+    layer = to_gpu(AttentionLayer(in_dim=32, num_heads=4, dropout=0.0))
     outputs1 = layer(inputs, inputs, inputs, mask=True)
     assert_dims(outputs1, [sl, bs, in_features])
 

@@ -133,7 +133,6 @@ class Decoder(nn.Module):
             new_logprobs = self.mask_logprobs(bs, finished, iteration, logprobs, new_logprobs, num_beams, num_tokens)
 
             # TODO implement stochastic beam search
-            # TODO take into account sequence_length for
             # get the top logprobs and their indices
             logprobs, beams = torch.topk(new_logprobs, k=num_beams, dim=-1)  # [1, bs, num_beams]
             parents = beams / num_tokens

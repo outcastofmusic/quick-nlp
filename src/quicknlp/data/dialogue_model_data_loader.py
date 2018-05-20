@@ -6,9 +6,8 @@ from fastai.dataset import ModelData
 from torch import optim
 from torchtext.data import Dataset, Field
 
-from quicknlp.data.s2s_model_data_loader import EncoderDecoderLearner
 from quicknlp.models import CVAE, HRED
-from quicknlp.models.cvae import cvae_loss
+from .learners import EncoderDecoderLearner, cvae_loss
 from .data_loaders import DialogueDataLoader
 from .datasets import DialogueDataset
 from .model_helpers import CVAEModel, HREDModel, PrintingMixin
@@ -141,7 +140,7 @@ class CVAEModelData(HREDModelData):
     def to_model(self, m, opt_fn):
         model = CVAEModel(to_gpu(m))
         learner = EncoderDecoderLearner(self, model, opt_fn=opt_fn)
-        learner.crit = partial(cvae_loss, pad_idx=learner.data.pad_idx)  # change loss to auxilliary loss
+        learner.crit = partial(cvae_loss, pad_idx=learner.data.pad_idx)  # change loss to auxiliary loss
         return learner
 
     def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, latent_dim=100, bow_nhid=400,

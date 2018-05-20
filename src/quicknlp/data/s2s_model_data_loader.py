@@ -4,61 +4,14 @@ from typing import Callable, List, Optional
 import pandas as pd
 from fastai.core import to_gpu
 from fastai.dataset import ModelData
-from fastai.learner import Learner, load_model, save_model
 from torch import optim
-from torch.nn import functional as F
 from torchtext.data import Dataset, Field
 
-from quicknlp.data.data_loaders import S2SDataLoader
 from quicknlp.models import Seq2Seq, Seq2SeqAttention, Transformer
+from .data_loaders import S2SDataLoader
+from .learners import EncoderDecoderLearner
 from .datasets import NamedField, TabularDatasetFromDataFrame, TabularDatasetFromFiles
-from .model_helpers import PrintingMixin, S2SModel, check_columns_in_df, predict_with_seq2seq
-
-
-def decoder_loss(input, target, pad_idx, *args, **kwargs):
-    vocab = input.size(-1)
-    # dims are sq-1 times bs times vocab
-    input = input[:target.size(0)].view(-1, vocab).contiguous()
-    # targets are sq-1 times bs (one label for every word)
-    target = target.view(-1).contiguous()
-    return F.cross_entropy(input=input,
-                           target=target,
-                           ignore_index=pad_idx,
-                           *args, **kwargs)
-
-
-class EncoderDecoderLearner(Learner):
-
-    def s2sloss(self, input, target, **kwargs):
-        return decoder_loss(input=input, target=target, pad_idx=self.data.pad_idx, **kwargs)
-
-    def __init__(self, data, models, **kwargs):
-        super().__init__(data, models, **kwargs)
-        self.crit = self.s2sloss
-
-    def save_encoder(self, name):
-        save_model(self.model[0], self.get_model_path(name))
-
-    def load_encoder(self, name):
-        load_model(self.model[0], self.get_model_path(name))
-
-    def predict_with_targs(self, is_test=False):
-        return self.predict_with_targs_and_inputs(is_test=is_test)[:2]
-
-    def predict_with_targs_and_inputs(self, is_test=False, num_beams=1):
-        dl = self.data.test_dl if is_test else self.data.val_dl
-        return predict_with_seq2seq(self.model, dl, num_beams=num_beams)
-
-    def predict_array(self, arr):
-        raise NotImplementedError
-
-    def summary(self):
-        print(self.model)
-
-    def predict(self, is_test=False):
-        dl = self.data.test_dl if is_test else self.data.val_dl
-        pr, *_ = predict_with_seq2seq(self.model, dl)
-        return pr
+from .model_helpers import PrintingMixin, S2SModel, check_columns_in_df
 
 
 class S2SModelData(ModelData, PrintingMixin):

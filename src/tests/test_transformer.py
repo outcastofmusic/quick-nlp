@@ -1,7 +1,7 @@
 from fastai.core import V, to_gpu
 from torch.optim import Adam
 
-from quicknlp.data.s2s_model_data_loader import decoder_loss
+from quicknlp.data.learners import decoder_loss
 from quicknlp.models.transformer import Transformer
 from quicknlp.utils import get_trainable_parameters
 
