@@ -23,18 +23,22 @@ def cvae_loss(input, target, pad_idx, *args, **kwargs):
     vocab = predictions.size(-1)
     # dims are sq-1 times bs times vocab
     dec_input = predictions[:target.size(0)].view(-1, vocab).contiguous()
-    bow_input = F.log_softmax(bow_logits, dim=-1)
-    bow_values = bow_input.gather(1, target.transpose(1, 0)).masked_fill(target.transpose(1, 0) == pad_idx, -1e-12)
-    bow_loss = bow_values.sum()
+    bow_targets = torch.zeros_like(bow_logits).scatter(1, target.transpose(1,0),1)
+    mask = torch.zeros_like(bow_logits)
+    # ignore pad_idx in training
+    mask[:,pad_idx]= -1e30
+    bow_logits = bow_logits + mask
+    bow_targets[:,pad_idx]=0
+    bow_loss = F.binary_cross_entropy_with_logits(bow_logits, bow_targets,*args, **kwargs)
     # targets are sq-1 times bs (one label for every word)
+    # TODO implement kld annealing
+    kld_weight = kwargs.pop('kld_weight', 1.)
+    kld_loss = gaussian_kld(recog_mu, recog_log_var, prior_mu, prior_log_var)
     target = target.view(-1).contiguous()
     decoder_loss = F.cross_entropy(input=dec_input,
                                    target=target,
                                    ignore_index=pad_idx,
                                    *args, **kwargs)
-    # TODO implement kld annealing
-    kld_weight = kwargs.pop('kld_weight', 1.)
-    kld_loss = gaussian_kld(recog_mu, recog_log_var, prior_mu, prior_log_var)
     return decoder_loss + bow_loss + kld_loss * kld_weight
 
 
@@ -118,14 +122,11 @@ class CVAE(HRED):
         query_encoder_outputs = torch.stack(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
         raw_outputs_session, session_outputs = self.session_encoder(query_encoder_outputs)
         session = session_outputs[-1][-1:]
-        if self.training:
-            self.query_encoder.reset(bs)
-            _, decoder_outputs = self.query_encoder(decoder_inputs)
-            x = torch.cat([session, decoder_outputs[-1][-1:]], dim=-1)
-            recog_mu_log_var = self.recognition_network(x)
-            recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.latent_dim, dim=-1)
-        else:
-            recog_mu, recog_log_var = None, None
+        self.query_encoder.reset(bs)
+        _, decoder_outputs = self.query_encoder(decoder_inputs)
+        x = torch.cat([session, decoder_outputs[-1][-1:]], dim=-1)
+        recog_mu_log_var = self.recognition_network(x)
+        recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.latent_dim, dim=-1)
 
         prior_mu_log_var = self.prior_network(session)
         prior_mu, prior_log_var = torch.split(prior_mu_log_var, self.latent_dim, dim=-1)
@@ -135,7 +136,7 @@ class CVAE(HRED):
         else:
             latent_sample = self.reparameterize(prior_mu, prior_log_var)
         session = torch.cat([session, latent_sample], dim=-1)
-        bow_logits = self.bow_network(session).squeeze(0) if self.training else None
+        bow_logits = self.bow_network(session).squeeze(0) if num_beams == 0 else None
         self.decoder.reset(bs)
         state = self.decoder.hidden
         # if there are multiple layers we set the state to the first layer and ignore all others
@@ -148,7 +149,7 @@ class CVAE(HRED):
         else:
             # use argmax or beam search predictions
             predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
-        if self.training:
-            return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits],
+        if num_beams == 0:
+            return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits],[*raw_outputs, *raw_outputs_dec], [*outputs, *outputs_dec]
         else:
             return predictions, [*raw_outputs, *raw_outputs_dec], [*outputs, *outputs_dec]
