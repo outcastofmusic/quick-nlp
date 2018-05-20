@@ -26,3 +26,7 @@ class Encoder(nn.Module):
     @property
     def layers(self):
         return self.encoder_layer.layers
+
+    @property
+    def out_dim(self):
+        return self.encoder_layer.out_dim

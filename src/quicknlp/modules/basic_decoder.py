@@ -185,6 +185,10 @@ class Decoder(nn.Module):
     def layers(self):
         return self.decoder_layer.layers
 
+    @property
+    def out_dim(self):
+        return self.projection_layer.out_dim if self.projection_layer is not None else self.decoder_layer.out_dim
+
 
 class TransformerDecoder(Decoder):
 
