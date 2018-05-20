@@ -148,6 +148,7 @@ class CVAE(HRED):
         else:
             # use argmax or beam search predictions
             predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
-        return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*raw_outputs,
-                                                                                             *raw_outputs_dec], [
-                   *outputs, *outputs_dec]
+        if self.training:
+            return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits],
+        else:
+            return predictions, [*raw_outputs, *raw_outputs_dec], [*outputs, *outputs_dec]
