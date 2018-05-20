@@ -141,7 +141,8 @@ class CVAEModelData(HREDModelData):
         model = CVAEModel(to_gpu(m))
         return EncoderDecoderLearner(self, model, opt_fn=opt_fn)
 
-    def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, latent_dim=100, **kwargs):
+    def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, latent_dim=100, bow_nhid=400,
+                  **kwargs):
         if opt_fn is None:
             opt_fn = partial(optim.Adam, betas=(0.8, 0.99))
         m = CVAE(
@@ -152,7 +153,8 @@ class CVAEModelData(HREDModelData):
             pad_token=self.pad_idx,
             eos_token=self.eos_idx,
             max_tokens=max_tokens,
-            latent_dim=latent_dim
-                       ** kwargs
+            latent_dim=latent_dim,
+            bow_nhid=bow_nhid,
+            **kwargs
         )
         return self.to_model(m, opt_fn)

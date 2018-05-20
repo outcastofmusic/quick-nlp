@@ -47,7 +47,8 @@ class CVAE(HRED):
     BPTT_MAX_UTTERANCES = 20
 
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
-                 eos_token: int, latent_dim: int, max_tokens: int = 50, share_embedding_layer: bool = False,
+                 eos_token: int, latent_dim: int, bow_nhid: int, max_tokens: int = 50,
+                 share_embedding_layer: bool = False,
                  tie_decoder: bool = True,
                  bidir: bool = False, **kwargs):
         """
@@ -80,10 +81,10 @@ class CVAE(HRED):
             nn.Linear(in_features=latent_dim, out_features=latent_dim * 2)
         )
         self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.session_encoder.out_dim,
-                                                   out_features=400),
+                                                   out_features=bow_nhid),
                                          nn.Tanh(),
                                          nn.Dropout(p=kwargs.get('dropout_b', 0.2)),
-                                         nn.Linear(in_features=400, out_features=self.decoder.out_dim)
+                                         nn.Linear(in_features=bow_nhid, out_features=self.decoder.out_dim)
                                          )
         self.decoder_state_linear = nn.Linear(in_features=self.session_encoder.out_dim + latent_dim,
                                               out_features=self.decoder.layers[0].output_size)
