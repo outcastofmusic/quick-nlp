@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastai.lm_rnn import repackage_var
 from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNLayers
-from quicknlp.utils import assert_dims, get_kwarg, get_list, concat_bidir_state
+from quicknlp.utils import assert_dims, get_kwarg, get_list
 
 HParam = Union[List[int], int]
 

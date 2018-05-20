@@ -32,7 +32,7 @@ def cvae_loss(input, target, pad_idx, *args, **kwargs):
                                    target=target,
                                    ignore_index=pad_idx,
                                    *args, **kwargs)
-
+    # TODO implement kld annealing
     kld_weight = kwargs.pop('kld_weight', 1.)
     kld_loss = gaussian_kld(recog_mu, recog_log_var, prior_mu, prior_log_var)
     return decoder_loss + bow_loss + kld_loss * kld_weight
@@ -47,7 +47,7 @@ class CVAE(HRED):
     BPTT_MAX_UTTERANCES = 20
 
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
-                 eos_token: int, lattent_dim: int, max_tokens: int = 50, share_embedding_layer: bool = False,
+                 eos_token: int, latent_dim: int, max_tokens: int = 50, share_embedding_layer: bool = False,
                  tie_decoder: bool = True,
                  bidir: bool = False, **kwargs):
         """
@@ -59,6 +59,7 @@ class CVAE(HRED):
             nlayers (Union[List[int],int]): Number of layers for the encoder and the decoder
             pad_token (int): The  index of the token used for padding
             eos_token (int): The index of the token used for eos
+            latent_dim (int): The dim of the latent variable
             max_tokens (int): The maximum number of steps the decoder iterates before stopping
             share_embedding_layer (bool): if True the decoder shares its input and output embeddings
             tie_decoder (bool): if True the encoder and the decoder share their embeddings
@@ -70,27 +71,27 @@ class CVAE(HRED):
                          eos_token=eos_token, max_tokens=max_tokens, share_embedding_layer=share_embedding_layer,
                          tie_decoder=tie_decoder, bidir=bidir
                          )
-        self.lattent_dim = lattent_dim
+        self.latent_dim = latent_dim
         self.recognition_network = nn.Linear(in_features=self.session_encoder.out_dim + self.query_encoder.out_dim,
-                                             out_features=lattent_dim * 2)
+                                             out_features=latent_dim * 2)
         self.prior_network = nn.Sequential(
-            nn.Linear(in_features=self.session_encoder.out_dim, out_features=lattent_dim),
+            nn.Linear(in_features=self.session_encoder.out_dim, out_features=latent_dim),
             nn.Tanh(),
-            nn.Linear(in_features=lattent_dim, out_features=lattent_dim * 2)
+            nn.Linear(in_features=latent_dim, out_features=latent_dim * 2)
         )
-        self.bow_network = nn.Sequential(nn.Linear(in_features=lattent_dim + self.session_encoder.out_dim,
+        self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.session_encoder.out_dim,
                                                    out_features=400),
                                          nn.Tanh(),
                                          nn.Dropout(p=kwargs.get('dropout_b', 0.2)),
                                          nn.Linear(in_features=400, out_features=self.decoder.out_dim)
                                          )
-        self.decoder_state_linear = nn.Linear(in_features=self.session_encoder.out_dim + lattent_dim,
+        self.decoder_state_linear = nn.Linear(in_features=self.session_encoder.out_dim + latent_dim,
                                               out_features=self.decoder.layers[0].output_size)
 
     def reparameterize(self, mu, logvar):
         if self.training:
             std = torch.exp(0.5 * logvar)
-            eps = to_gpu(V(torch.randn(self.lattent_dim)))
+            eps = to_gpu(V(torch.randn(self.latent_dim)))
             return mu + eps * std
         else:
             return mu
@@ -121,12 +122,12 @@ class CVAE(HRED):
             _, decoder_outputs = self.query_encoder(decoder_inputs)
             x = torch.cat([session, decoder_outputs[-1][-1:]], dim=-1)
             recog_mu_log_var = self.recognition_network(x)
-            recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.lattent_dim, dim=-1)
+            recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.latent_dim, dim=-1)
         else:
             recog_mu, recog_log_var = None, None
 
         prior_mu_log_var = self.prior_network(session)
-        prior_mu, prior_log_var = torch.split(prior_mu_log_var, self.lattent_dim, dim=-1)
+        prior_mu, prior_log_var = torch.split(prior_mu_log_var, self.latent_dim, dim=-1)
 
         if self.training:
             latent_sample = self.reparameterize(recog_mu, recog_log_var)

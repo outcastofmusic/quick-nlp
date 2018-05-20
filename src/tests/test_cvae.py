@@ -23,7 +23,7 @@ def model(hredmodel, request):
     nh = 1024
     ntoken = hredmodel.nt
     model = CVAE(ntoken=ntoken, nhid=nh, nlayers=2, emb_sz=emb_size, pad_token=hredmodel.pad_idx,
-                 eos_token=hredmodel.eos_idx, lattent_dim=100, bidir=request.param)
+                 eos_token=hredmodel.eos_idx, latent_dim=100, bidir=request.param)
     model = to_gpu(model)
     return model
 
