@@ -10,17 +10,30 @@ from quicknlp.data.model_helpers import predict_with_seq2seq
 from quicknlp.stepper import S2SStepper
 
 
-def decoder_loss(input, target, pad_idx, *args, **kwargs):
-    vocab = input.size(-1)
-    # dims are sq-1 times bs times vocab
-    input = input[:target.size(0)].view(-1, vocab).contiguous()
-    # targets are sq-1 times bs (one label for every word)
-    # TODO implement label smoothing
-    target = target.view(-1).contiguous()
-    return F.cross_entropy(input=input,
-                           target=target,
-                           ignore_index=pad_idx,
-                           *args, **kwargs)
+def decoder_loss(input, target, pad_idx, **kwargs):
+    sl_in, bs_in, vocab = input.size()
+    sl, bs = target.size()
+    if sl > sl_in: input = F.pad(input, (0, 0, 0, 0, 0, sl - sl_in))
+    input = input[:sl]
+    return F.cross_entropy(input=input.view(-1, vocab),
+                           target=target.view(-1),
+                           ignore_index=pad_idx)
+
+
+def decoder_loss_smoothed(input, target, pad_idx, smoothing_factor=1., **kwargs):
+    sl_in, bs_in, vocab = input.size()
+    sl, bs = target.size()
+    if sl > sl_in: input = F.pad(input, (0, 0, 0, 0, 0, sl - sl_in))
+    smoothing_factor = 1. / (vocab * 3) if smoothing_factor == 1.0 else smoothing_factor
+    targets = torch.zeros_like(input).scatter(2, target, 1 - (vocab - 1) / vocab)
+    targets = (targets + smoothing_factor)
+    targets = targets.div(targets.sum(dim=-1).unsqueeze(-1))
+    weights = to_gpu(V(torch.ones(targets.size(-1)).view(1, 1, -1)))
+    weights[..., pad_idx] = 0
+    return F.binary_cross_entropy_with_logits(input=input,
+                                              target=targets,
+                                              weight=weights
+                                              )
 
 
 def gaussian_kld(recog_mu, recog_logvar, prior_mu, prior_logvar):
@@ -30,7 +43,7 @@ def gaussian_kld(recog_mu, recog_logvar, prior_mu, prior_logvar):
     return kld
 
 
-def cvae_loss(input, target, pad_idx, *args, **kwargs):
+def cvae_loss(input, target, pad_idx, step=0, max_kld_step=None, **kwargs):
     predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits = input
     vocab = predictions.size(-1)
     # dims are sq-1 times bs times vocab
@@ -39,28 +52,32 @@ def cvae_loss(input, target, pad_idx, *args, **kwargs):
     # mask pad token
     weights = to_gpu(V(torch.ones(bow_logits.size(-1)).unsqueeze_(0)))
     weights[0, pad_idx] = 0
-    bow_loss = F.binary_cross_entropy_with_logits(bow_logits, bow_targets, weight=weights, *args, **kwargs)
+    bow_loss = F.binary_cross_entropy_with_logits(bow_logits, bow_targets, weight=weights)
 
     # targets are sq-1 times bs (one label for every word)
-    # TODO implement kld annealing
-    kld_weight = kwargs.pop('kld_weight', 1.)
     kld_loss = gaussian_kld(recog_mu, recog_log_var, prior_mu, prior_log_var)
     target = target.view(-1).contiguous()
     decoder_loss = F.cross_entropy(input=dec_input,
                                    target=target,
                                    ignore_index=pad_idx,
-                                   *args, **kwargs)
+                                   )
+    kld_weight = 1.0 if max_kld_step is None else min((step + 1) / max_kld_step, 1)
     return decoder_loss + bow_loss + kld_loss * kld_weight
 
 
 class EncoderDecoderLearner(Learner):
 
-    def s2sloss(self, input, target, **kwargs):
-        return decoder_loss(input=input, target=target, pad_idx=self.data.pad_idx, **kwargs)
+    def s2sloss(self, input, target, smoothing_factor=None, **kwargs):
+        if smoothing_factor is None:
+            return decoder_loss(input=input, target=target, pad_idx=self.data.pad_idx, **kwargs)
+        else:
+            return decoder_loss_smoothed(input=input, target=target, pad_idx=self.data.pad_idx,
+                                         smoothing_factor=smoothing_factor, **kwargs
+                                         )
 
-    def __init__(self, data, models, **kwargs):
+    def __init__(self, data, models, smoothing_factor=None, **kwargs):
         super().__init__(data, models, **kwargs)
-        self.crit = self.s2sloss
+        self.crit = partial(self.s2sloss, smoothing_factor=smoothing_factor)
         self.fit_gen = partial(self.fit_gen, stepper=S2SStepper)
 
     def save_encoder(self, name):

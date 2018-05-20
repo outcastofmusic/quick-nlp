@@ -16,7 +16,7 @@ class Transformer(nn.Module):
         super().__init__()
 
         ntokens = get_list(ntokens, 2)
-
+        self.nlayers = nlayers
         dropout = get_kwarg(kwargs, name="dropout", default_value=0.1)
         num_heads = get_kwarg(kwargs, name="num_heads", default_value=8)
         nhid = get_kwarg(kwargs, name="nhid", default_value=2048)
@@ -54,13 +54,7 @@ class Transformer(nn.Module):
     def forward(self, *inputs, num_beams=0):
 
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
-        sl, bs = encoder_inputs.size()
         encoder_outputs = self.encoder(encoder_inputs)
         decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
-        if num_beams == 0:
-            # use output of the projection module
-            predictions = assert_dims(decoder_outputs[-1], [None, bs, self.nt])  # dims: [sl, bs, nt]
-        else:
-            # use argmax or beam search predictions
-            predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
-        return predictions, decoder_outputs, decoder_outputs
+        predictions = decoder_outputs[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
+        return predictions, decoder_outputs

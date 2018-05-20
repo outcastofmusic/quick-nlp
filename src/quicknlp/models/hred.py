@@ -1,3 +1,4 @@
+import random
 from typing import List, Union
 
 import torch
@@ -110,6 +111,7 @@ class HRED(nn.Module):
         self.decoder_state_linear = nn.Linear(in_features=self.session_encoder.out_dim,
                                               out_features=self.decoder.layers[0].output_size)
         self.nt = ntoken[-1]
+        self.pr_force = 1.0
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
@@ -133,11 +135,11 @@ class HRED(nn.Module):
         state = self.decoder.hidden
         # if there are multiple layers we set the state to the first layer and ignore all others
         state[0] = F.tanh(self.decoder_state_linear(session_outputs[-1][-1:])) # get the session_output of the last layer and the last step
-        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
-        if num_beams == 0:
-            # use output of the projection module
-            predictions = assert_dims(outputs_dec[-1], [None, bs, self.nt])  # dims: [sl, bs, nt]
+        if self.training:
+            self.decoder.pr_force = self.pr_force
+            nb = 1 if self.pr_force < 1 else 0
         else:
-            # use argmax or beam search predictions
-            predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
+            nb = num_beams
+        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
+        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
         return predictions, [*outputs, *outputs_dec]

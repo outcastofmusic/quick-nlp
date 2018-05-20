@@ -1,3 +1,5 @@
+import random
+
 from quicknlp.modules import AttentionDecoder, AttentionProjection, Encoder, RNNLayers
 from quicknlp.modules.embeddings import DropoutEmbeddings
 from quicknlp.utils import HParam, assert_dims, get_kwarg
@@ -85,6 +87,7 @@ class Seq2SeqAttention(Seq2Seq):
         self.nlayers = nlayers
         self.nhid = nhid
         self.emb_sz = emb_sz
+        self.pr_force = 1.0
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = inputs
@@ -98,6 +101,11 @@ class Seq2SeqAttention(Seq2Seq):
         assert_dims(outputs, [self.nlayers[0], None, bs, (self.nhid[0], self.emb_sz[0])])
         # pass the encoder outputs as keys to the attention projection_layer
         self.decoder.projection_layer.reset(keys=outputs[-1])
-        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
-        predictions = outputs_dec[-1] if num_beams == 0 else self.decoder.beam_outputs
+        if self.training:
+            self.decoder.pr_force = self.pr_force
+            nb = 1 if self.pr_force < 1 else 0
+        else:
+            nb = num_beams
+        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
+        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
         return predictions, [*outputs, *outputs_dec]

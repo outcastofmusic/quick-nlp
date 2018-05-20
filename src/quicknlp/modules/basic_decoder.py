@@ -1,3 +1,5 @@
+import random
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -36,6 +38,7 @@ def select_hidden_by_index(hidden, indices):
 
 
 class Decoder(nn.Module):
+    MAX_STEPS_ALLOWED = 320
 
     def __init__(self, decoder_layer, projection_layer, max_tokens, eos_token, pad_token,
                  embedding_layer: torch.nn.Module):
@@ -50,6 +53,7 @@ class Decoder(nn.Module):
         self.beam_outputs = None
         self.embedding_layer = embedding_layer
         self.emb_size = embedding_layer.emb_size
+        self.pr_force = 0.0
 
     def reset(self, bs):
         self.decoder_layer.reset(bs)
@@ -76,26 +80,30 @@ class Decoder(nn.Module):
         return outputs
 
     def _greedy_forward(self, inputs, hidden=None):
-        inputs = inputs[:1]  # inputs should be only first token initially [1,bs]
+        dec_inputs = inputs
+        max_iterations = min(dec_inputs.size(0), self.MAX_STEPS_ALLOWED) if self.training else self.max_iterations
+        inputs = V(inputs[:1].data)  # inputs should be only first token initially [1,bs]
         sl, bs = inputs.size()
         finished = to_gpu(torch.zeros(bs).byte())
         iteration = 0
         self.beam_outputs = inputs.clone()
         layer_outputs = [[] for _ in range(self.nlayers)]
-        while not finished.all() and iteration < self.max_iterations:
+        while not finished.all() and iteration < max_iterations:
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
+            if 0 < iteration and self.training and random.random() < self.pr_force:
+                inputs = dec_inputs[iteration].unsqueeze(0)
             output = self.forward(inputs, hidden=hidden, num_beams=0)
             hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
 
-            #  inputs are the indices  dims [1,bs]
-            _, inputs = output[-1].max(dim=-1)
-            assert_dims(inputs, [1, bs])
+            #  inputs are the indices  dims [1,bs] # repackage the var to avoid grad backwards
+            inputs = assert_dims(V(output[-1].data.max(dim=-1)[1]), [1, bs])
             iteration += 1
             self.beam_outputs = assert_dims(torch.cat([self.beam_outputs, inputs], dim=0), [iteration + 1, bs])
             new_finished = inputs.data == self.eos_token
             finished = finished | new_finished
+            # stop if the output is to big to fit in memory
 
         self.beam_outputs = self.beam_outputs.view(-1, bs, 1)
         # ensure the outputs are a list of layers where each layer is [sl,bs,layerdim]
@@ -224,7 +232,7 @@ class TransformerDecoder(Decoder):
 
         self.beam_outputs = self.beam_outputs.view(-1, bs, 1)
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
-        return outputs, outputs
+        return outputs
 
     def _topk_forward(self, inputs, hidden, num_beams):
         sl, bs = inputs.size()
@@ -270,4 +278,4 @@ class TransformerDecoder(Decoder):
         # ensure the outputs are a list of layers where each layer is [sl,bs,layerdim]
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         self.beam_outputs = self.beam_outputs.view(-1, bs, num_beams)
-        return outputs, outputs
+        return outputs

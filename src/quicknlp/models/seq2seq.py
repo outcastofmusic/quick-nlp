@@ -1,3 +1,5 @@
+import random
+
 import torch.nn as nn
 
 from quicknlp.modules import Projection, RNNLayers, Decoder, Encoder
@@ -30,7 +32,6 @@ class Seq2Seq(nn.Module):
         # allow for the same or different parameters between encoder and decoder
         ntoken, emb_sz, nhid, nlayers = get_list(ntoken, 2), get_list(emb_sz, 2), get_list(nhid, 2), get_list(nlayers,
                                                                                                               2)
-
         dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)
         dropoute = get_kwarg(kwargs, name="dropout_e", default_value=0.1)
         dropouti = get_kwarg(kwargs, name="dropout_i", default_value=0.65)
@@ -80,7 +81,8 @@ class Seq2Seq(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.nt = ntoken[-1] # number of possible tokens
+        self.nt = ntoken[-1]  # number of possible tokens
+        self.pr_force = 1.0  # teacher forcing probability
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
@@ -90,11 +92,11 @@ class Seq2Seq(nn.Module):
         self.decoder.reset(bs)
         outputs = self.encoder(encoder_inputs)
         state = concat_bidir_state(self.encoder.encoder_layer.hidden)
-        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=num_beams)
-        if num_beams == 0:
-            # use output of the projection module
-            predictions = assert_dims(outputs_dec[-1], [None, bs, self.nt])  # dims: [sl, bs, nt]
+        if self.training:
+            self.decoder.pr_force = self.pr_force
+            nb = 1 if self.pr_force < 1 else 0
         else:
-            # use argmax or beam search predictions
-            predictions = assert_dims(self.decoder.beam_outputs, [None, bs, num_beams])  # dims: [sl, bs, nb]
+            nb = num_beams
+        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
+        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
         return predictions, [*outputs, *outputs_dec]

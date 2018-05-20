@@ -5,22 +5,28 @@ from fastai.model import Stepper, update_fp32_grads, IS_TORCH_04, trainable_para
 
 
 class S2SStepper(Stepper):
-    def __init__(self, m, opt, crit, clip=0, reg_fn=None, fp16=False, loss_scale=1, teacher_forcing=0.):
+    def __init__(self, m, opt, crit, clip=0, reg_fn=None, fp16=False, loss_scale=1, teacher_forcing=None,
+                 max_kld_step=None):
         super(S2SStepper, self).__init__(m=m, opt=opt, crit=crit, clip=clip, reg_fn=reg_fn, fp16=fp16,
                                          loss_scale=loss_scale)
-        self.teacher_forcing = 0
+        self.teacher_forcing_epochs = teacher_forcing  # if None to disable teacher forcing schedule
+        self.max_kld_step = max_kld_step  # optionally used in CVAE
 
     def step(self, xs, y, epoch):
         xtra = []
         output = self.m(*xs)
+        if self.teacher_forcing_epochs is None:
+            self.m.pr_force = 1.
+        elif 0 <= epoch < self.teacher_forcing_epochs:
+            self.m.pr_force = (self.teacher_forcing_epochs - epoch) / self.teacher_forcing_epochs
+        else:
+            self.m.pr_force = 0.
         if isinstance(output, tuple): output, *xtra = output
         if self.fp16:
             self.m.zero_grad()
         else:
             self.opt.zero_grad()
-        import pdb
-        pdb.set_trace()
-        loss = raw_loss = self.crit(output, y)
+        loss = raw_loss = self.crit(output, y, step=epoch, max_kld_step=self.max_kld_step)
         if self.loss_scale != 1: assert (self.fp16); loss = loss * self.loss_scale
         if self.reg_fn: loss = self.reg_fn(output, xtra, raw_loss)
         loss.backward()
