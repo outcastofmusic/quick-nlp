@@ -7,13 +7,13 @@ from torch import optim
 from torchtext.data import Dataset, Field
 
 from quicknlp.data.s2s_model_data_loader import EncoderDecoderLearner
-from quicknlp.models import HRED
+from quicknlp.models import CVAE, HRED
 from .data_loaders import DialogueDataLoader
 from .datasets import DialogueDataset
-from .model_helpers import HREDModel, PrintingMixin
+from .model_helpers import CVAEModel, HREDModel, PrintingMixin
 
 
-class DialogueModelData(ModelData, PrintingMixin):
+class HREDModelData(ModelData, PrintingMixin):
     """
     This class provides the entry point for dealing with supported NLP Dialogue Tasks, i.e. tasks where each sample involves
     sequences of sentences e.g. dialogues etc.
@@ -121,7 +121,7 @@ class DialogueModelData(ModelData, PrintingMixin):
 
     def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, **kwargs):
         if opt_fn is None:
-            opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
+            opt_fn = partial(optim.Adam, betas=(0.8, 0.99))
         m = HRED(
             ntoken=self.nt,
             emb_sz=emb_sz,
@@ -131,5 +131,28 @@ class DialogueModelData(ModelData, PrintingMixin):
             eos_token=self.eos_idx,
             max_tokens=max_tokens,
             **kwargs
+        )
+        return self.to_model(m, opt_fn)
+
+
+class CVAModelData(HREDModelData):
+
+    def to_model(self, m, opt_fn):
+        model = CVAEModel(to_gpu(m))
+        return EncoderDecoderLearner(self, model, opt_fn=opt_fn)
+
+    def get_model(self, opt_fn=None, emb_sz=300, nhid=512, nlayers=2, max_tokens=100, latent_dim=100, **kwargs):
+        if opt_fn is None:
+            opt_fn = partial(optim.Adam, betas=(0.8, 0.99))
+        m = CVAE(
+            ntoken=self.nt,
+            emb_sz=emb_sz,
+            nhid=nhid,
+            nlayers=nlayers,
+            pad_token=self.pad_idx,
+            eos_token=self.eos_idx,
+            max_tokens=max_tokens,
+            latent_dim=latent_dim
+                       ** kwargs
         )
         return self.to_model(m, opt_fn)
