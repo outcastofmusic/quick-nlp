@@ -4,29 +4,39 @@ from inspect import signature
 from operator import itemgetter
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
-
+from nltk.translate.bleu_score import sentence_bleu
+from nltk.translate.bleu_score import SmoothingFunction
 import numpy as np
 import torch
 import torch.nn as nn
-from fastai.core import to_np
+from fastai.core import to_np, map_over
 from fastai.learner import Learner, ModelData
 from tqdm import tqdm
 
 from quicknlp.data.model_helpers import BatchBeamTokens
 
-States = List[Tuple[torch.Tensor, torch.Tensor]]
+States = Union[List[Union[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]], torch.Tensor]
 
 HParam = Union[List[int], int]
 
 
-def concat_bidir_state(states: States) -> States:
-    state = []
-    for layer in states:
-        if layer[0].size(0) > 1:  # if num_directions is two
-            state.append((layer[0].transpose(1, 0).contiguous().view(1, -1, 2 * layer[0].size(-1)),
-                          layer[1].transpose(1, 0).contiguous().view(1, -1, 2 * layer[1].size(-1))))
-        else:
-            state.append((layer[0], layer[1]))
+def concat_layer_bidir_state(states: States, bidir, cell_type):
+    if cell_type == "lstm" and bidir:
+        return (states[0].transpose(1, 0).contiguous().view(1, -1, 2 * states[0].size(-1)),
+                states[1].transpose(1, 0).contiguous().view(1, -1, 2 * states[1].size(-1)))
+    elif cell_type == "gru" and bidir:
+        return states.transpose(1, 0).contiguous().view(1, -1, 2 * states[0].size(-1))
+    elif cell_type in ['lstm', 'gru'] and not bidir:
+        return states
+
+
+def concat_bidir_state(states: States, bidir: bool, cell_type: str, nlayers: int) -> States:
+    if nlayers == 1:
+        state = concat_layer_bidir_state(states, bidir=bidir, cell_type=cell_type)
+    else:
+        state = []
+        for index in range(nlayers):
+            state.append(concat_layer_bidir_state(states[index], bidir=bidir, cell_type=cell_type))
     return state
 
 
@@ -71,25 +81,34 @@ def print_features(modeldata: ModelData, num_batches=1, num_sentences=-1):
 
 
 def print_batch(learner: Learner, modeldata: ModelData, input_field, output_field, num_batches=1, num_sentences=-1,
-                is_test=False, num_beams=1):
+                is_test=False, num_beams=1, weights=None, smoothing_function=None):
     predictions, targets, inputs = learner.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
+    weights = (1 / 3., 1 / 3., 1 / 3.) if weights is None else weights
+    smoothing_function = SmoothingFunction().method1 if smoothing_function is None else smoothing_function
+    blue_scores = []
     for batch_num, (input, target, prediction) in enumerate(zip(inputs, targets, predictions)):
         inputs_str: BatchBeamTokens = modeldata.itos(input, input_field)
         predictions_str: BatchBeamTokens = modeldata.itos(prediction, output_field)
         targets_str: BatchBeamTokens = modeldata.itos(target, output_field)
         for index, (inp, targ, pred) in enumerate(zip(inputs_str, targets_str, predictions_str)):
+            blue_score = sentence_bleu([targ], pred, smoothing_function=smoothing_function, weights=weights)
             print(
-                f'batch: {batch_num} sample : {index}\ninput: {" ".join(inp)}\ntarget: { " ".join(targ)}\nprediction: {" ".join(pred)}\n\n')
+                f'batch: {batch_num} sample : {index}\ninput: {" ".join(inp)}\ntarget: { " ".join(targ)}\nprediction: {" ".join(pred)}\nbleu: {blue_score}\n\n')
+            blue_scores.append(blue_score)
             if 0 < num_sentences <= index - 1:
                 break
         if 0 < num_batches <= batch_num - 1:
             break
+    print(f'mean bleu score: {np.mean(blue_scores)}')
 
 
 def print_dialogue_batch(learner: Learner, modeldata: ModelData, input_field, output_field, num_batches=1,
                          num_sentences=-1, is_test=False,
-                         num_beams=1):
+                         num_beams=1, smoothing_function=None, weights=None):
+    weights = (1 / 3., 1 / 3., 1 / 3.) if weights is None else weights
+    smoothing_function = SmoothingFunction().method1 if smoothing_function is None else smoothing_function
     predictions, targets, inputs = learner.predict_with_targs_and_inputs(is_test=is_test, num_beams=num_beams)
+    blue_scores = []
     for batch_num, (input, target, prediction) in enumerate(zip(inputs, targets, predictions)):
         input = np.transpose(input, [1, 2, 0])  # transpose number of utterances to beams [sl, bs, nb]
         inputs_str: BatchBeamTokens = modeldata.itos(input, input_field)
@@ -97,12 +116,21 @@ def print_dialogue_batch(learner: Learner, modeldata: ModelData, input_field, ou
         predictions_str: BatchBeamTokens = modeldata.itos(prediction, output_field)
         targets_str: BatchBeamTokens = modeldata.itos(target, output_field)
         for index, (inp, targ, pred) in enumerate(zip(inputs_str, targets_str, predictions_str)):
+            if targ[0].split() == pred[0].split()[1:]:
+                blue_score = 1
+            else:
+                blue_score = sentence_bleu([targ[0].split()], pred[0].split()[1:],
+                                           smoothing_function=smoothing_function,
+                                           weights=weights
+                                           )
             print(
-                f'BATCH: {batch_num} SAMPLE : {index}\nINPUT:\n{"".join(inp)}\nTARGET:\n{ "".join(targ)}\nPREDICTON:\n{"".join(pred)}\n\n')
+                f'BATCH: {batch_num} SAMPLE : {index}\nINPUT:\n{"".join(inp)}\nTARGET:\n{ "".join(targ)}\nPREDICTON:\n{"".join(pred)}\nblue: {blue_score}\n\n')
+            blue_scores.append(blue_score)
             if 0 < num_sentences <= index - 1:
                 break
         if 0 < num_batches <= batch_num - 1:
             break
+    print(f'bleu score: mean: {np.mean(blue_scores)}, std: {np.std(blue_scores)}')
 
 
 def get_trainable_parameters(model: nn.Module, grad=False) -> List[str]:

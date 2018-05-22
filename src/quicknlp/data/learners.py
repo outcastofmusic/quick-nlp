@@ -27,7 +27,7 @@ def decoder_loss_smoothed(input, target, pad_idx, smoothing_factor=1., **kwargs)
     smoothing_factor = 1. / (vocab * 3) if smoothing_factor == 1.0 else smoothing_factor
     targets = torch.zeros_like(input).scatter(2, target, 1 - (vocab - 1) / vocab)
     targets = (targets + smoothing_factor)
-    targets = targets.div(targets.sum(dim=-1).unsqueeze(-1))
+    targets = targets.div(targets.sum(dim=-1).unsqueeze_(-1))
     weights = to_gpu(V(torch.ones(targets.size(-1)).view(1, 1, -1)))
     weights[..., pad_idx] = 0
     return F.binary_cross_entropy_with_logits(input=input,
@@ -44,6 +44,27 @@ def gaussian_kld(recog_mu, recog_logvar, prior_mu, prior_logvar):
 
 
 def cvae_loss(input, target, pad_idx, step=0, max_kld_step=None, **kwargs):
+    predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits = input
+    sl, bs, vocab = predictions.size()
+    # dims are sq-1 times bs times vocab
+    dec_input = predictions[:target.size(0)].view(-1, vocab).contiguous()
+    slt = target.size(0)
+    bow_targets = bow_logits.unsqueeze_(0).repeat(slt, 1, 1)
+    target = target.view(-1).contiguous()
+    bow_loss = F.cross_entropy(input=bow_targets.view(-1, vocab), target=target, ignore_index=pad_idx,
+                               reduce=False).view(-1, bs)
+    bow_loss = bow_loss.sum(0).mean()
+    # targets are sq-1 times bs (one label for every word)
+    kld_loss = gaussian_kld(recog_mu, recog_log_var, prior_mu, prior_log_var)
+    decoder_loss = F.cross_entropy(input=dec_input,
+                                   target=target,
+                                   ignore_index=pad_idx,
+                                   )
+    kld_weight = 1.0 if max_kld_step is None else min((step + 1) / max_kld_step, 1)
+    return decoder_loss + bow_loss + kld_loss * kld_weight
+
+
+def cvae_loss_sigmoid(input, target, pad_idx, step=0, max_kld_step=None, **kwargs):
     predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits = input
     vocab = predictions.size(-1)
     # dims are sq-1 times bs times vocab
@@ -67,12 +88,12 @@ def cvae_loss(input, target, pad_idx, step=0, max_kld_step=None, **kwargs):
 
 class EncoderDecoderLearner(Learner):
 
-    def s2sloss(self, input, target, smoothing_factor=None, **kwargs):
+    def s2sloss(self, input, target, smoothing_factor=None, pad_idx=1, **kwargs):
         if smoothing_factor is None:
-            return decoder_loss(input=input, target=target, pad_idx=self.data.pad_idx, **kwargs)
+            return decoder_loss(input=input, target=target, pad_idx=pad_idx, **kwargs)
         else:
-            return decoder_loss_smoothed(input=input, target=target, pad_idx=self.data.pad_idx,
-                                         smoothing_factor=smoothing_factor, **kwargs
+            return decoder_loss_smoothed(input=input, target=target, smoothing_factor=smoothing_factor, pad_idx=pad_idx,
+                                         **kwargs
                                          )
 
     def __init__(self, data, models, smoothing_factor=None, **kwargs):

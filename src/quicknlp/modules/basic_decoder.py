@@ -90,8 +90,10 @@ class Decoder(nn.Module):
         layer_outputs = [[] for _ in range(self.nlayers)]
         while not finished.all() and iteration < max_iterations:
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
-            if 0 < iteration and self.training and random.random() < self.pr_force:
+            if 0 < iteration and self.training and 0. < random.random() < self.pr_force:
                 inputs = dec_inputs[iteration].unsqueeze(0)
+                import pdb
+                pdb.set_trace()
             output = self.forward(inputs, hidden=hidden, num_beams=0)
             hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
@@ -132,7 +134,7 @@ class Decoder(nn.Module):
             new_logprobs = F.log_softmax(output[-1], dim=-1)  # [1, bs x num_beams, nt]
             num_tokens = new_logprobs.size(2)
             new_logprobs = new_logprobs.view(1, bs, num_beams, num_tokens) + logprobs.unsqueeze(-1)  # [1, bs, nb, nt]
-            # only the first beam is considered in the first step, otherwise we would get the same result for every beam
+            # mask logprogs accordingly
             new_logprobs = self.mask_logprobs(bs, finished, iteration, logprobs, new_logprobs, num_beams, num_tokens)
 
             # TODO implement stochastic beam search
@@ -163,7 +165,7 @@ class Decoder(nn.Module):
         else:
             # we have to cater for finished beams as well
             # create a mask [1, bs x nb, nt] with - inf everywhere
-            mask = torch.zeros_like(new_logprobs).fill_(-1E32).view(1, bs * num_beams, num_tokens)
+            mask = torch.zeros_like(new_logprobs).fill_(-1e32).view(1, bs * num_beams, num_tokens)
             f = V(finished.unsqueeze(0))
             # set the pad_token position to the last logprob for the finished ones
             mask[..., self.pad_token] = logprobs
