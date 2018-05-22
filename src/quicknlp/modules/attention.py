@@ -7,27 +7,7 @@ from fastai.rnn_reg import LockedDropout
 from quicknlp.utils import assert_dims
 
 
-class Attention(nn.Module):
-
-    def __init__(self, p=0.0):
-        super(Attention, self).__init__()
-        self.dropout = LockedDropout(p) if p > 0.0 else None
-
-    def score(self, query, key):
-        raise NotImplementedError
-
-    def forward(self, query, keys, values):
-        # Query dim [bs, dimQ]
-        # keys dim [sl, bs, dimK]
-        # values dim [sl, bs, dimV]
-        scores = [self.score(query, key) for key in keys]
-        scores = F.softmax(tr.stack(scores, dim=0), dim=0)
-        if self.dropout is not None:
-            scores = self.dropout(scores)
-        return (scores * values).sum(dim=0)
-
-
-class MLPAttention(Attention):
+class MLPAttention(nn.Module):
     """Multilayer Perceptron Attention Bandandau et al. 2015"""
 
     def __init__(self, n_in, nhid, p=0.0):
@@ -38,13 +18,21 @@ class MLPAttention(Attention):
                     the sum of the keys and query dims
             nhid (int): The dimension of the internal prediction.
         """
-        super().__init__(p=p)
+        super().__init__()
+        self.dropout = LockedDropout(p) if p > 0.0 else None
         self.linear1 = nn.Linear(in_features=n_in, out_features=nhid, bias=False)
         self.linear2 = nn.Linear(in_features=nhid, out_features=1, bias=False)
 
-    def score(self, query, key):
-        input = tr.cat([query, key], dim=-1)
-        return self.linear2(F.tanh(self.linear1(input)))
+    def forward(self, query, keys, values):
+        # Query dim [bs, dimQ]
+        # keys dim [sl, bs, dimK]
+        # values dim [sl, bs, dimV]
+        inputs = tr.cat([query.unsqueeze(0).repeat(keys.size(0), 1, 1), keys], dim=-1)
+        scores = self.linear2(F.tanh((self.linear1(inputs))))  # [sl,bs, 1]
+        scores = F.softmax(scores, dim=0)  # [sl,bs, 1]
+        if self.dropout is not None:
+            scores = self.dropout(scores)
+        return (scores * values).sum(dim=0)  # [bs, dimV]
 
 
 class SDPAttention(nn.Module):
@@ -60,6 +48,7 @@ class SDPAttention(nn.Module):
         # keys dim [sl, bs, dimK]
         # values dim [sl, bs, dimV]
         dot = (query * keys).sum(dim=-1) / self.scale
+        # dot = (query @ keys) / self.scale
         weights = F.softmax(dot, dim=0).unsqueeze(-1)
         if self.dropout is not None:
             weights = self.dropout(weights)

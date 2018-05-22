@@ -1,11 +1,9 @@
-import random
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from fastai.core import V, to_gpu
 
-from quicknlp.utils import assert_dims
+from quicknlp.utils import assert_dims, RandomUniform
 
 
 def repeat_cell_state(hidden, num_beams):
@@ -54,6 +52,7 @@ class Decoder(nn.Module):
         self.embedding_layer = embedding_layer
         self.emb_size = embedding_layer.emb_size
         self.pr_force = 0.0
+        self.random = RandomUniform()
 
     def reset(self, bs):
         self.decoder_layer.reset(bs)
@@ -90,7 +89,7 @@ class Decoder(nn.Module):
         layer_outputs = [[] for _ in range(self.nlayers)]
         while not finished.all() and iteration < max_iterations:
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
-            if 0 < iteration and self.training and 0. < random.random() < self.pr_force:
+            if 0 < iteration and self.training and 0. < self.random() < self.pr_force:
                 inputs = dec_inputs[iteration].unsqueeze(0)
             output = self.forward(inputs, hidden=hidden, num_beams=0)
             hidden = self.decoder_layer.hidden

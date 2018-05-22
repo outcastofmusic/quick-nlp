@@ -4,13 +4,14 @@ from inspect import signature
 from operator import itemgetter
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
-from nltk.translate.bleu_score import sentence_bleu
-from nltk.translate.bleu_score import SmoothingFunction
+
 import numpy as np
 import torch
 import torch.nn as nn
-from fastai.core import to_np, map_over
+from fastai.core import to_np
 from fastai.learner import Learner, ModelData
+from nltk.translate.bleu_score import SmoothingFunction
+from nltk.translate.bleu_score import sentence_bleu
 from tqdm import tqdm
 
 from quicknlp.data.model_helpers import BatchBeamTokens
@@ -18,6 +19,22 @@ from quicknlp.data.model_helpers import BatchBeamTokens
 States = Union[List[Union[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]], torch.Tensor]
 
 HParam = Union[List[int], int]
+
+
+class RandomUniform:
+
+    def __init__(self, numbers=1000000):
+        self.numbers = numbers
+        self.array = np.random.rand(numbers)
+        self.count = 0
+
+    def __call__(self, *args, **kwargs):
+        if self.count >= self.array.size:
+            self.count = 0
+            self.array = np.random.rand(self.numbers)
+        rand = self.array[self.count]
+        self.count += 1
+        return rand
 
 
 def concat_layer_bidir_state(states: States, bidir, cell_type):
