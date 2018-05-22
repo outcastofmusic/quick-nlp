@@ -193,7 +193,7 @@ class TransformerModelData(S2SModelData):
         if opt_fn is None:
             opt_fn = partial(optim.Adam, betas=(0.7, 0.99))
         m = Transformer(
-            ntokens=[self.nt[name] for name in self.trn_dl.source_names],
+            ntoken=[self.nt[name] for name in self.trn_dl.source_names],
             emb_size=emb_sz,
             nlayers=nlayers,
             pad_token=self.pad_idx,

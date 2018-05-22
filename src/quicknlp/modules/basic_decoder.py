@@ -42,7 +42,7 @@ class Decoder(nn.Module):
 
     def __init__(self, decoder_layer, projection_layer, max_tokens, eos_token, pad_token,
                  embedding_layer: torch.nn.Module):
-        super(Decoder, self).__init__()
+        super().__init__()
         self.decoder_layer = decoder_layer
         self.nlayers = decoder_layer.nlayers
         self.projection_layer = projection_layer
@@ -92,8 +92,6 @@ class Decoder(nn.Module):
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
             if 0 < iteration and self.training and 0. < random.random() < self.pr_force:
                 inputs = dec_inputs[iteration].unsqueeze(0)
-                import pdb
-                pdb.set_trace()
             output = self.forward(inputs, hidden=hidden, num_beams=0)
             hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):

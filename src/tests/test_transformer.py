@@ -9,7 +9,7 @@ from quicknlp.utils import get_trainable_parameters
 
 def test_model(s2smodel):
     ntoken = [s2smodel.nt[name] for name in s2smodel.trn_dl.source_names]
-    model = Transformer(ntokens=ntoken, max_tokens=5, eos_token=s2smodel.eos_idx)
+    model = Transformer(ntoken=ntoken, max_tokens=5, eos_token=s2smodel.eos_idx)
     model = to_gpu(model)
     *xs, y = next(iter(s2smodel.trn_dl))
     xs = V(xs)

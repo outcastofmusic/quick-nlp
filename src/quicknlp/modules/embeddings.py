@@ -55,8 +55,8 @@ class DropoutEmbeddings(nn.Module):
             ntokens (int): number of vocabulary (or tokens) in the source dataset
             emb_size (int): the embedding size to use to encode each token
             pad_token (int): the int value used for padding text.
-            dropoute (float): dropout to apply to the embedding layer.
-            dropouti (float): dropout to apply to the input layer.
+            dropoute (float): dropout to apply to the embedding layer. zeros out tokens
+            dropouti (float): dropout to apply to the input layer. zeros out features
         """
         super().__init__()
         self.encoder = nn.Embedding(ntokens, emb_size, padding_idx=pad_token)

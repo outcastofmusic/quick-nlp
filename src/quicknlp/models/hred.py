@@ -49,24 +49,28 @@ class HRED(nn.Module):
         super().__init__()
         # allow for the same or different parameters between encoder and decoder
         ntoken, emb_sz, nhid, nlayers = get_list(ntoken), get_list(emb_sz, 2), get_list(nhid, 3), get_list(nlayers, 3)
-        dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)
-        dropoute = get_kwarg(kwargs, name="dropout_e", default_value=0.1)
-        dropouti = get_kwarg(kwargs, name="dropout_i", default_value=0.65)
-        dropouth = get_kwarg(kwargs, name="dropout_h", default_value=0.3)
-        wdrop = get_kwarg(kwargs, name="wdrop", default_value=0.5)
+        dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)  # output dropout
+        dropoute = get_kwarg(kwargs, name="dropout_e", default_value=0.1)  # encoder embedding dropout
+        dropoute = get_list(dropoute, 2)
+        dropouti = get_kwarg(kwargs, name="dropout_i", default_value=0.65)  # input dropout
+        dropouti = get_list(dropouti, 2)
+        dropouth = get_kwarg(kwargs, name="dropout_h", default_value=0.3)  # RNN output layers dropout
+        dropouth = get_list(dropouth, 3)
+        wdrop = get_kwarg(kwargs, name="wdrop", default_value=0.5)  # RNN weights dropout
+        wdrop = get_list(wdrop, 3)
         self.cell_type = "gru"
 
         encoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[0],
                                                     emb_size=emb_sz[0],
-                                                    dropoute=dropoute,
-                                                    dropouti=dropouti
+                                                    dropoute=dropoute[0],
+                                                    dropouti=dropouti[0]
                                                     )
 
         encoder_rnn = RNNLayers(in_dim=emb_sz[0],
                                 out_dim=kwargs.get("out_dim_encoder", emb_sz[0]),
                                 nhid=nhid[0], bidir=bidir,
-                                dropouth=dropouth,
-                                wdrop=wdrop,
+                                dropouth=dropouth[0],
+                                wdrop=wdrop[0],
                                 nlayers=nlayers[0],
                                 cell_type=self.cell_type,
                                 )
@@ -77,7 +81,7 @@ class HRED(nn.Module):
         )
         self.session_encoder = RNNLayers(in_dim=encoder_rnn.out_dim, nhid=nhid[1], out_dim=nhid[2], nlayers=1,
                                          bidir=False,
-                                         cell_type=self.cell_type, wdrop=wdrop, dropouth=dropouth,
+                                         cell_type=self.cell_type, wdrop=wdrop[1], dropouth=dropouth[1],
                                          )
 
         if share_embedding_layer:
@@ -85,14 +89,14 @@ class HRED(nn.Module):
         else:
             decoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[-1],
                                                         emb_size=emb_sz[-1],
-                                                        dropoute=dropoute,
-                                                        dropouti=dropouti
+                                                        dropoute=dropoute[1],
+                                                        dropouti=dropouti[1]
                                                         )
 
         decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]),
                                 out_dim=kwargs.get("out_dim_decoder", emb_sz[-1]),
-                                nhid=nhid[-1], bidir=False, dropouth=dropouth,
-                                wdrop=wdrop, nlayers=nlayers[-1], cell_type=self.cell_type)
+                                nhid=nhid[-1], bidir=False, dropouth=dropouth[2],
+                                wdrop=wdrop[2], nlayers=nlayers[-1], cell_type=self.cell_type)
 
         # allow for changing sizes of decoder output
         in_dim = decoder_rnn.out_dim

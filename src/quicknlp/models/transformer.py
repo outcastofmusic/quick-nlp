@@ -11,17 +11,17 @@ class Transformer(nn.Module):
 
     """
 
-    def __init__(self, ntokens, emb_size=512, nlayers=6, pad_token=None, eos_token=None, max_tokens=200,
+    def __init__(self, ntoken, emb_size=512, nlayers=6, pad_token=None, eos_token=None, max_tokens=200,
                  share_embedding_layer=False, tie_decoder=True, **kwargs):
         super().__init__()
 
-        ntokens = get_list(ntokens, 2)
+        ntoken = get_list(ntoken, 2)
         self.nlayers = nlayers
         dropout = get_kwarg(kwargs, name="dropout", default_value=0.1)
         num_heads = get_kwarg(kwargs, name="num_heads", default_value=8)
         nhid = get_kwarg(kwargs, name="nhid", default_value=2048)
 
-        encoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[0], emb_size=emb_size, dropout=dropout,
+        encoder_embedding_layer = TransformerEmbeddings(ntokens=ntoken[0], emb_size=emb_size, dropout=dropout,
                                                         pad_token=pad_token)
         encoder_layer = TransformerEncoderLayers(num_layers=nlayers, in_dim=emb_size, num_heads=num_heads,
                                                  nhid=nhid)
@@ -30,11 +30,11 @@ class Transformer(nn.Module):
         if share_embedding_layer:
             decoder_embedding_layer = encoder_embedding_layer
         else:
-            decoder_embedding_layer = TransformerEmbeddings(ntokens=ntokens[-1], emb_size=emb_size, dropout=dropout,
+            decoder_embedding_layer = TransformerEmbeddings(ntokens=ntoken[-1], emb_size=emb_size, dropout=dropout,
                                                             pad_token=pad_token)
 
         decoder_layer = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size, num_heads=num_heads, nhid=nhid)
-        projection_layer = Projection(out_dim=ntokens[-1], in_dim=emb_size, dropout=dropout,
+        projection_layer = Projection(out_dim=ntoken[-1], in_dim=emb_size, dropout=dropout,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )
         self.decoder = TransformerDecoder(
@@ -45,7 +45,7 @@ class Transformer(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.nt = ntokens[-1]
+        self.nt = ntoken[-1]
         # xavier uniform initialization
         for p in self.parameters():
             if p.dim() > 1:

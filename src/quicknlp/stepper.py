@@ -7,7 +7,7 @@ from fastai.model import Stepper, update_fp32_grads, IS_TORCH_04, trainable_para
 class S2SStepper(Stepper):
     def __init__(self, m, opt, crit, clip=0, reg_fn=None, fp16=False, loss_scale=1, teacher_forcing=None,
                  max_kld_step=None):
-        super(S2SStepper, self).__init__(m=m, opt=opt, crit=crit, clip=clip, reg_fn=reg_fn, fp16=fp16,
+        super().__init__(m=m, opt=opt, crit=crit, clip=clip, reg_fn=reg_fn, fp16=fp16,
                                          loss_scale=loss_scale)
         self.teacher_forcing_epochs = teacher_forcing  # if None to disable teacher forcing schedule
         self.max_kld_step = max_kld_step  # optionally used in CVAE
