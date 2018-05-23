@@ -2,15 +2,15 @@ from typing import List, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from fastai.lm_rnn import repackage_var
-from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNLayers
+from quicknlp.modules import DropoutEmbeddings, Encoder, RNNLayers, AttentionProjection, \
+    AttentionDecoder
 from quicknlp.utils import assert_dims, get_kwarg, get_list
 
 HParam = Union[List[int], int]
 
 
-class HRED(nn.Module):
+class HREDAttention(nn.Module):
     """Basic HRED model
     paper: A Hierarchical Latent Variable Encoder-Decoder Model for Generating Dialogues. Iulian Vlad Serban et al. 2016a.
     github: https://github.com/julianser/hed-dlg-truncated
@@ -19,7 +19,7 @@ class HRED(nn.Module):
 
     BPTT_MAX_UTTERANCES = 1000
 
-    def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
+    def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, att_nhid: int, pad_token: int,
                  eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
                  bidir: bool = False, **kwargs):
         """
@@ -29,6 +29,7 @@ class HRED(nn.Module):
             emb_sz (Union[List[int],int]): Embedding size for the encoder and decoder embeddings
             nhid (Union[List[int],int]): Number of hidden dims for the encoder (first two values) and the decoder
             nlayers (Union[List[int],int]): Number of layers for the encoder and the decoder
+            att_nhid (int): Number of hidden dims for the attention Module
             pad_token (int): The  index of the token used for padding
             eos_token (int): The index of the token used for eos
             max_tokens (int): The maximum number of steps the decoder iterates before stopping
@@ -49,10 +50,10 @@ class HRED(nn.Module):
         dropouth = get_list(dropouth, 3)
         wdrop = get_kwarg(kwargs, name="wdrop", default_value=0.5)  # RNN weights dropout
         wdrop = get_list(wdrop, 3)
-
         self.cell_type = "gru"
         self.nt = ntoken[-1]
         self.pr_force = 1.0
+        self.nlayers = nlayers
 
         encoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[0],
                                                     emb_size=emb_sz[0],
@@ -73,9 +74,10 @@ class HRED(nn.Module):
             encoder_layer=encoder_rnn
 
         )
-        self.session_encoder = RNNLayers(in_dim=encoder_rnn.out_dim, nhid=nhid[1], out_dim=nhid[2], nlayers=1,
-                                         bidir=False,
-                                         cell_type=self.cell_type, wdrop=wdrop[1], dropouth=dropouth[1],
+        self.session_encoder = RNNLayers(in_dim=encoder_rnn.out_dim, nhid=nhid[1],
+                                         out_dim=kwargs.get("out_dim", emb_sz[0]), nlayers=1,
+                                         bidir=False, cell_type=self.cell_type,
+                                         wdrop=wdrop[1], dropouth=dropouth[1],
                                          )
 
         if share_embedding_layer:
@@ -87,18 +89,19 @@ class HRED(nn.Module):
                                                         dropouti=dropouti[1]
                                                         )
 
-        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]),
-                                out_dim=kwargs.get("out_dim_decoder", emb_sz[-1]),
+        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1] * 2),
+                                out_dim=kwargs.get("out_dim", emb_sz[-1]),
                                 nhid=nhid[-1], bidir=False, dropouth=dropouth[2],
                                 wdrop=wdrop[2], nlayers=nlayers[-1], cell_type=self.cell_type)
 
-        # allow for changing sizes of decoder output
-        in_dim = decoder_rnn.out_dim
-        nhid = emb_sz[-1] if in_dim != emb_sz[-1] else None
-        projection_layer = Projection(out_dim=ntoken[-1], in_dim=in_dim, nhid=nhid, dropout=dropoutd,
-                                      tie_encoder=decoder_embedding_layer if tie_decoder else None
-                                      )
-        self.decoder = Decoder(
+        projection_layer = AttentionProjection(out_dim=ntoken[-1],
+                                               in_dim=emb_sz[-1],
+                                               dropout=dropoutd,
+                                               att_nhid=att_nhid,
+                                               att_type="SDP",
+                                               tie_encoder=decoder_embedding_layer if tie_decoder else None
+                                               )
+        self.decoder = AttentionDecoder(
             decoder_layer=decoder_rnn,
             projection_layer=projection_layer,
             embedding_layer=decoder_embedding_layer,
@@ -106,14 +109,13 @@ class HRED(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.decoder_state_linear = nn.Linear(in_features=self.session_encoder.out_dim,
-                                              out_features=self.decoder.layers[0].output_size)
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
         bs = encoder_inputs.size(2)
         self.session_encoder.reset(bs)
+        self.decoder.reset(bs)
         query_encoder_outputs = []
         outputs = []
         num_utterances, max_sl, *_ = encoder_inputs.size()
@@ -129,16 +131,13 @@ class HRED(nn.Module):
             query_encoder_outputs.append(out)  # get the last sl output of the query_encoder
         query_encoder_outputs = torch.stack(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
         session_outputs = self.session_encoder(query_encoder_outputs)
-        self.decoder.reset(bs)
-        state = self.decoder.hidden
-        # if there are multiple layers we set the state to the first layer and ignore all others
-        state[0] = F.tanh(self.decoder_state_linear(
-            session_outputs[-1][-1:]))  # get the session_output of the last layer and the last step
+        self.decoder.projection_layer.reset(keys=session_outputs[-1])
         if self.training:
             self.decoder.pr_force = self.pr_force
             nb = 1 if self.pr_force < 1 else 0
         else:
             nb = num_beams
-        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
+        state = self.decoder.hidden
+        outputs_dec = self.decoder(decoder_inputs,hidden=state ,num_beams=nb)
         predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
         return predictions, [*outputs, *outputs_dec]

@@ -40,6 +40,12 @@ class Seq2SeqAttention(nn.Module):
         wdrop = get_kwarg(kwargs, name="wdrop", default_value=0.5)  # RNN weights dropout
         wdrop = get_list(wdrop, 2)
         cell_type = get_kwarg(kwargs, name="cell_type", default_value="lstm")
+
+        self.nlayers = nlayers
+        self.nhid = nhid
+        self.emb_sz = emb_sz
+        self.pr_force = 1.0
+
         encoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[0],
                                                     emb_size=emb_sz[0],
                                                     dropoute=dropoute[0],
@@ -78,7 +84,6 @@ class Seq2SeqAttention(nn.Module):
                                                att_nhid=att_nhid,
                                                tie_encoder=decoder_embedding_layer if tie_decoder else None
                                                )
-        self.nlayers = nlayers
         self.decoder = AttentionDecoder(
             decoder_layer=decoder_rnn,
             projection_layer=projection_layer,
@@ -87,10 +92,6 @@ class Seq2SeqAttention(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.nlayers = nlayers
-        self.nhid = nhid
-        self.emb_sz = emb_sz
-        self.pr_force = 1.0
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = inputs

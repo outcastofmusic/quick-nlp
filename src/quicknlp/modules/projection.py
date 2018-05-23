@@ -25,7 +25,10 @@ class Projection(nn.Module):
             nhid = in_dim
         linear2 = nn.Linear(nhid, out_dim, bias=False)
         if tie_encoder:
-            assert linear2.weight.shape == tie_encoder.weight.shape, "tied encoder weights do not match projection"
+            assert linear2.weight.shape == tie_encoder.weight.shape, "tied encoder {} does not match projection {}".format(
+                tie_encoder.weight.shape,
+                linear2.weight.shape
+            )
             linear2.weight = tie_encoder.weight
         layers["projection2"] = linear2
         self.layers = nn.Sequential(layers)

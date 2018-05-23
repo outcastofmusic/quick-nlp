@@ -80,6 +80,11 @@ class HREDModel(BasicModel):
                 self.model.decoder]
 
 
+class HREDAttentionModel(BasicModel):
+    def get_layer_groups(self, do_fc=False):
+        return [self.model.query_encoder, self.model.session_encoder, self.model.decoder]
+
+
 class CVAEModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
         return [self.model.query_encoder,

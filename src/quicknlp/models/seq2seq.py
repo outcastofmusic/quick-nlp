@@ -47,6 +47,9 @@ class Seq2Seq(nn.Module):
                                                     )
         self.bidir = bidir
         self.nlayers = nlayers[0]
+        self.nt = ntoken[-1]  # number of possible tokens
+        self.pr_force = 1.0  # teacher forcing probability
+
         encoder_rnn = RNNLayers(in_dim=emb_sz[0],
                                 out_dim=kwargs.get("out_dim", emb_sz[0]),
                                 nhid=nhid[0], bidir=bidir,
@@ -84,8 +87,6 @@ class Seq2Seq(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.nt = ntoken[-1]  # number of possible tokens
-        self.pr_force = 1.0  # teacher forcing probability
 
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder

@@ -14,7 +14,8 @@ HParam = Union[List[int], int]
 class CVAE(HRED):
     """Basic CVAE model see:
     T. Zhao, R. Zhao, and M. Eskenazi, “Learning Discourse-level Diversity for Neural Dialog Models using Conditional Variational Autoencoders,” arXiv.org, vol. cs.CL. 31-Mar-2017.
-
+    github: https://github.com/snakeztc/NeuralDialog-CVAE
+    arxiv: https://arxiv.org/abs/1703.10960
     """
 
     BPTT_MAX_UTTERANCES = 20
