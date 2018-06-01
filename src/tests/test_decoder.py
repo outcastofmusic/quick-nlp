@@ -47,12 +47,12 @@ def rnn_decoder(decoder_params):
                                                 )
 
     if decoder_params.attention:
-        # attention decoder must have double the in_dim to accommodate for the attention concat
-        decoder_rnn = RNNLayers(in_dim=decoder_params.emb_size * 2, out_dim=decoder_params.emb_size,
+        # attention decoder must have double the input_size to accommodate for the attention concat
+        decoder_rnn = RNNLayers(input_size=decoder_params.emb_size * 2, output_size=decoder_params.emb_size,
                                 nhid=decoder_params.nhid, bidir=False,
                                 nlayers=decoder_params.nlayers, cell_type="gru")
-        projection_layer = AttentionProjection(out_dim=decoder_params.ntokens,
-                                               in_dim=decoder_params.emb_size,
+        projection_layer = AttentionProjection(output_size=decoder_params.ntokens,
+                                               input_size=decoder_params.emb_size,
                                                att_nhid=decoder_params.att_hid,
                                                tie_encoder=None,
                                                dropout=0.0)
@@ -63,10 +63,11 @@ def rnn_decoder(decoder_params):
 
     else:
 
-        decoder_rnn = RNNLayers(in_dim=decoder_params.emb_size, out_dim=decoder_params.emb_size,
+        decoder_rnn = RNNLayers(input_size=decoder_params.emb_size, output_size=decoder_params.emb_size,
                                 nhid=decoder_params.nhid, bidir=False,
                                 nlayers=decoder_params.nlayers, cell_type="gru")
-        projection_layer = Projection(out_dim=decoder_params.ntokens, in_dim=decoder_params.emb_size, dropout=0.0,
+        projection_layer = Projection(output_size=decoder_params.ntokens, input_size=decoder_params.emb_size,
+                                      dropout=0.0,
                                       tie_encoder=None
                                       )
         decoder = Decoder(
@@ -149,10 +150,10 @@ def test_transformer_decoder(num_beams, decoder_inputs_transformer):
                                       dropout=0.0,
                                       pad_token=1)
 
-    encoder = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size,
+    encoder = TransformerDecoderLayers(nlayers=nlayers, input_size=emb_size,
                                        num_heads=2, nhid=emb_size)
-    projection_layer = Projection(out_dim=ntokens,
-                                  in_dim=emb_size, tie_encoder=None, dropout=0.0)
+    projection_layer = Projection(output_size=ntokens,
+                                  input_size=emb_size, tie_encoder=None, dropout=0.0)
     decoder = TransformerDecoder(decoder_layer=encoder, projection_layer=projection_layer, pad_token=1, eos_token=2,
                                  max_tokens=max_tokens,
                                  embedding_layer=embedding)

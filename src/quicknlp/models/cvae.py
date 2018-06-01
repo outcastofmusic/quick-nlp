@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from fastai.core import V, to_gpu
+from fastai.lm_rnn import repackage_var
 
 from quicknlp.utils import assert_dims, concat_bidir_state
 from .hred import HRED
@@ -17,8 +18,6 @@ class CVAE(HRED):
     github: https://github.com/snakeztc/NeuralDialog-CVAE
     arxiv: https://arxiv.org/abs/1703.10960
     """
-
-    BPTT_MAX_UTTERANCES = 20
 
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, latent_dim: int, bow_nhid: int, max_tokens: int = 50,
@@ -47,20 +46,20 @@ class CVAE(HRED):
                          tie_decoder=tie_decoder, bidir=bidir
                          )
         self.latent_dim = latent_dim
-        self.recognition_network = nn.Linear(in_features=self.se_enc.out_dim + self.query_encoder.out_dim,
+        self.recognition_network = nn.Linear(in_features=self.se_enc.output_size + self.query_encoder.output_size,
                                              out_features=latent_dim * 2)
         self.prior_network = nn.Sequential(
-            nn.Linear(in_features=self.se_enc.out_dim, out_features=latent_dim),
+            nn.Linear(in_features=self.se_enc.output_size, out_features=latent_dim),
             nn.Tanh(),
             nn.Linear(in_features=latent_dim, out_features=latent_dim * 2)
         )
-        self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.se_enc.out_dim,
+        self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.se_enc.output_size,
                                                    out_features=bow_nhid),
                                          nn.Tanh(),
                                          nn.Dropout(p=kwargs.get('dropout_b', 0.2)),
-                                         nn.Linear(in_features=bow_nhid, out_features=self.decoder.out_dim)
+                                         nn.Linear(in_features=bow_nhid, out_features=self.decoder.output_size)
                                          )
-        self.decoder_state_linear = nn.Linear(in_features=self.se_enc.out_dim + latent_dim,
+        self.decoder_state_linear = nn.Linear(in_features=self.se_enc.output_size + latent_dim,
                                               out_features=self.decoder.layers[0].output_size)
 
     def reparameterize(self, mu, logvar):
@@ -75,10 +74,12 @@ class CVAE(HRED):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
         bs = encoder_inputs.size(2)
+        self.query_encoder.reset(bs)
         self.se_enc.reset(bs)
-        query_encoder_outputs, outputs = [], []
+        query_encoder_outputs = []
+        state = self.query_encoder.hidden
         for index, context in enumerate(encoder_inputs):
-            self.query_encoder.reset(bs)
+            state = repackage_var(state)
             outputs = self.query_encoder(context)  # context has size [sl, bs]
             out = concat_bidir_state(self.query_encoder.encoder_layer.hidden[-1],
                                      cell_type=self.cell_type, nlayers=1,
@@ -93,10 +94,14 @@ class CVAE(HRED):
             query_encoder_outputs.append(out)  # get the last sl output of the query_encoder
         query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
         session_outputs = self.se_enc(query_encoder_outputs)
-        session = session_outputs.hidden[-1]
+        session = self.se_enc.hidden[-1]
         self.query_encoder.reset(bs)
         decoder_outputs = self.query_encoder(decoder_inputs)
-        x = torch.cat([session, decoder_outputs.hidden[-1]], dim=-1)
+        decoder_out = concat_bidir_state(self.query_encoder.encoder_layer.hidden[-1],
+                                         cell_type=self.cell_type, nlayers=1,
+                                         bidir=self.query_encoder.encoder_layer.bidir
+                                         )
+        x = torch.cat([session, decoder_out], dim=-1)
         recog_mu_log_var = self.recognition_network(x)
         recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.latent_dim, dim=-1)
 

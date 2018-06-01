@@ -25,15 +25,15 @@ class NormEmbeddings(nn.Module):
 class PositionalEncoding(nn.Module):
     "Sinusoid Positional embedding see http://nlp.seas.harvard.edu/2018/04/03/attention.html"
 
-    def __init__(self, in_dim, dropout, max_len=5000):
+    def __init__(self, input_size, dropout, max_len=5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
         # Compute the positional encodings once in log space.
-        pe = torch.zeros(max_len, in_dim)
+        pe = torch.zeros(max_len, input_size)
         position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, in_dim, 2) *
-                             -(math.log(10000.0) / in_dim))
+        div_term = torch.exp(torch.arange(0, input_size, 2) *
+                             -(math.log(10000.0) / input_size))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
@@ -80,7 +80,7 @@ class TransformerEmbeddings(nn.Module):
     def __init__(self, ntokens, emb_size, dropout, pad_token=None, max_len=5000):
         super(TransformerEmbeddings, self).__init__()
         self.layers = nn.Sequential(NormEmbeddings(emb_size=emb_size, tokens=ntokens, padding_idx=pad_token),
-                                    PositionalEncoding(in_dim=emb_size, dropout=dropout, max_len=max_len))
+                                    PositionalEncoding(input_size=emb_size, dropout=dropout, max_len=max_len))
         self.emb_size = emb_size
 
     def forward(self, input_tensor):

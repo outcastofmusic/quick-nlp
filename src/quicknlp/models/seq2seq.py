@@ -50,8 +50,8 @@ class Seq2Seq(nn.Module):
         self.nt = ntoken[-1]  # number of possible tokens
         self.pr_force = 1.0  # teacher forcing probability
 
-        encoder_rnn = RNNLayers(in_dim=emb_sz[0],
-                                out_dim=kwargs.get("out_dim", emb_sz[0]),
+        encoder_rnn = RNNLayers(input_size=emb_sz[0],
+                                output_size=kwargs.get("out_dim", emb_sz[0]),
                                 nhid=nhid[0], bidir=bidir,
                                 dropouth=dropouth[0],
                                 wdrop=wdrop[0],
@@ -72,11 +72,12 @@ class Seq2Seq(nn.Module):
                                                         dropouti=dropouti[1]
                                                         )
 
-        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]), out_dim=kwargs.get("out_dim", emb_sz[-1]),
+        decoder_rnn = RNNLayers(input_size=kwargs.get("input_size", emb_sz[-1]),
+                                output_size=kwargs.get("output_size", emb_sz[-1]),
                                 nhid=nhid[-1], bidir=False, dropouth=dropouth[1],
                                 wdrop=wdrop[1], nlayers=nlayers[-1], cell_type=self.cell_type)
 
-        projection_layer = Projection(out_dim=ntoken[-1], in_dim=emb_sz[-1], dropout=dropoutd,
+        projection_layer = Projection(output_size=ntoken[-1], input_size=emb_sz[-1], dropout=dropoutd,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )
         self.decoder = Decoder(

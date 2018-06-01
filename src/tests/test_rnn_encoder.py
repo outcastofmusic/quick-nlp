@@ -2,8 +2,8 @@ import numpy as np
 from fastai.core import T, V, to_gpu, to_np
 
 from quicknlp.modules import RNNLayers
-from quicknlp.modules.embeddings import DropoutEmbeddings
 from quicknlp.modules.basic_encoder import Encoder
+from quicknlp.modules.embeddings import DropoutEmbeddings
 from quicknlp.utils import assert_dims
 
 
@@ -16,10 +16,10 @@ def test_BiRNNEncoder():
 
     embedding = DropoutEmbeddings(ntokens=ntoken, emb_size=emb_sz, pad_token=0,
                                   dropouti=0.0, dropoute=0.0)
-    rnn_layers = RNNLayers(in_dim=emb_sz,
+    rnn_layers = RNNLayers(input_size=emb_sz,
                            nhid=nhid,
                            nlayers=nlayers,
-                           out_dim=emb_sz,
+                           output_size=emb_sz,
                            dropouth=0.0,
                            wdrop=0.0,
                            )
@@ -50,7 +50,7 @@ def test_BiRNNEncoder():
 
     # Then the the new states are different from before
     outputs = encoder(vin)
-    assert_dims(outputs,[nlayers, sl, bs,(nhid, encoder.out_dim)])
+    assert_dims(outputs, [nlayers, sl, bs, (nhid, encoder.output_size)])
     initial_hidden = encoder.encoder_layer.hidden
     h1 = []
     c1 = []
@@ -62,7 +62,7 @@ def test_BiRNNEncoder():
 
     # Then the the new states are different from before
     outputs = encoder(vin)
-    assert_dims(outputs,[nlayers, sl, bs,(nhid, encoder.out_dim)])
+    assert_dims(outputs, [nlayers, sl, bs, (nhid, encoder.output_size)])
     initial_hidden = encoder.encoder_layer.hidden
 
     for hl, cl, layer in zip(h1, c1, initial_hidden):

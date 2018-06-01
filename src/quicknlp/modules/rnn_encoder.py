@@ -6,10 +6,10 @@ from fastai.lm_rnn import LockedDropout
 from .cell import Cell
 
 
-def get_layer_dims(layer_index, total_layers, in_dim, out_dim, nhid, bidir):
+def get_layer_dims(layer_index, total_layers, input_size, output_size, nhid, bidir):
     ndir = 2 if bidir else 1
-    input_size = in_dim if layer_index == 0 else nhid
-    output_size = (nhid if layer_index != total_layers - 1 else out_dim) // ndir
+    input_size = input_size if layer_index == 0 else nhid
+    output_size = (nhid if layer_index != total_layers - 1 else output_size) // ndir
     return input_size, output_size
 
 
@@ -18,13 +18,13 @@ class RNNLayers(nn.Module):
     Wrote this class to allow for a multilayered RNN encoder. It is based the fastai RNN_Encoder class
     """
 
-    def __init__(self, in_dim, out_dim, nhid, nlayers, dropouth=0.3, wdrop=0.5, bidir=False, cell_type="lstm",
+    def __init__(self, input_size, output_size, nhid, nlayers, dropouth=0.3, wdrop=0.5, bidir=False, cell_type="lstm",
                  train_init=False, **kwargs):
         """ Default Constructor for the RNNLayers class
 
         Args:
-            in_dim (int): the dimension of the input vectors
-            out_dim (int) the dimension of the output vectors
+            input_size (int): the dimension of the input vectors
+            output_size (int) the dimension of the output vectors
             nhid (int): number of hidden activation per layer
             nlayers (int): number of layers to use in the architecture
             dropouth (float): dropout to apply to the activations going from one  layer to another
@@ -36,17 +36,17 @@ class RNNLayers(nn.Module):
         super().__init__()
         layers = []
         for layer_index in range(nlayers):
-            input_size, output_size = get_layer_dims(layer_index=layer_index, total_layers=nlayers,
-                                                     in_dim=in_dim,
-                                                     out_dim=out_dim,
-                                                     nhid=nhid, bidir=bidir)
+            inp_size, out_size = get_layer_dims(layer_index=layer_index, total_layers=nlayers,
+                                                input_size=input_size,
+                                                output_size=output_size,
+                                                nhid=nhid, bidir=bidir)
             layers.append(
-                Cell(cell_type=cell_type, input_size=input_size, output_size=output_size,
+                Cell(cell_type=cell_type, input_size=inp_size, output_size=out_size,
                      bidir=bidir, dropouth=0.0, wdrop=wdrop, train_init=train_init)
             )
 
         self.layers = nn.ModuleList(layers)
-        self.in_dim, self.out_dim, self.nhid, self.nlayers, self.bidir = in_dim, out_dim, nhid, nlayers, bidir
+        self.input_size, self.output_size, self.nhid, self.nlayers, self.bidir = input_size, output_size, nhid, nlayers, bidir
         self.dropouths = nn.ModuleList([LockedDropout(dropouth) for l in range(nlayers)])
         self.hidden, self.weights = None, None
         self.reset(1)

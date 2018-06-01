@@ -28,5 +28,5 @@ class Encoder(nn.Module):
         return self.encoder_layer.layers
 
     @property
-    def out_dim(self):
-        return self.encoder_layer.out_dim
+    def output_size(self):
+        return self.encoder_layer.output_size

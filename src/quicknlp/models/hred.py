@@ -62,8 +62,8 @@ class HRED(nn.Module):
                                                     dropouti=dropouti[0]
                                                     )
 
-        encoder_rnn = RNNLayers(in_dim=emb_sz[0],
-                                out_dim=kwargs.get("out_dim_encoder", emb_sz[0]),
+        encoder_rnn = RNNLayers(input_size=emb_sz[0],
+                                output_size=kwargs.get("out_dim_encoder", emb_sz[0]),
                                 nhid=nhid[0], bidir=bidir,
                                 dropouth=dropouth[0],
                                 wdrop=wdrop[0],
@@ -78,8 +78,8 @@ class HRED(nn.Module):
         )
         self.se_enc = RNNLayers(
             cell_type=self.cell_type,
-            in_dim=encoder_rnn.out_dim,
-            out_dim=nhid[1],
+            input_size=encoder_rnn.output_size,
+            output_size=nhid[1],
             nhid=nhid[1],
             nlayers=1,
             dropouth=dropouth[1],
@@ -96,17 +96,17 @@ class HRED(nn.Module):
                                                         dropouti=dropouti[1]
                                                         )
 
-        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1]),
-                                out_dim=kwargs.get("out_dim_decoder", emb_sz[-1]),
+        decoder_rnn = RNNLayers(input_size=kwargs.get("input_size", emb_sz[-1]),
+                                output_size=kwargs.get("out_dim_decoder", emb_sz[-1]),
                                 nhid=nhid[-1], bidir=False, dropouth=dropouth[2],
                                 wdrop=wdrop[2], nlayers=nlayers[-1], cell_type=self.cell_type,
                                 train_init=train_init
                                 )
 
         # allow for changing sizes of decoder output
-        in_dim = decoder_rnn.out_dim
-        nhid = emb_sz[-1] if in_dim != emb_sz[-1] else None
-        projection_layer = Projection(out_dim=ntoken[-1], in_dim=in_dim, nhid=nhid, dropout=dropoutd,
+        input_size = decoder_rnn.output_size
+        nhid = emb_sz[-1] if input_size != emb_sz[-1] else None
+        projection_layer = Projection(output_size=ntoken[-1], input_size=input_size, nhid=nhid, dropout=dropoutd,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )
         self.decoder = Decoder(
@@ -117,7 +117,7 @@ class HRED(nn.Module):
             eos_token=eos_token,
             max_tokens=max_tokens,
         )
-        self.decoder_state_linear = nn.Linear(in_features=self.se_enc.out_dim,
+        self.decoder_state_linear = nn.Linear(in_features=self.se_enc.output_size,
                                               out_features=self.decoder.layers[0].output_size)
 
     def forward(self, *inputs, num_beams=0):
@@ -147,7 +147,8 @@ class HRED(nn.Module):
         # outputs, last_output = self.session_encoder(query_encoder_outputs, hidden)
         outputs = self.se_enc(query_encoder_outputs)
         last_output = self.se_enc.hidden[-1]
-        state = [F.tanh(self.decoder_state_linear(last_output))]
+        state = self.decoder.hidden
+        state[0] = F.tanh(self.decoder_state_linear(last_output))
         if self.training:
             self.decoder.pr_force = self.pr_force
             nb = 1 if self.pr_force < 1 else 0

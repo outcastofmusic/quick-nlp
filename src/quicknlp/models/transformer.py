@@ -23,7 +23,7 @@ class Transformer(nn.Module):
 
         encoder_embedding_layer = TransformerEmbeddings(ntokens=ntoken[0], emb_size=emb_size, dropout=dropout,
                                                         pad_token=pad_token)
-        encoder_layer = TransformerEncoderLayers(num_layers=nlayers, in_dim=emb_size, num_heads=num_heads,
+        encoder_layer = TransformerEncoderLayers(num_layers=nlayers, input_size=emb_size, num_heads=num_heads,
                                                  nhid=nhid)
         self.encoder = Encoder(embedding_layer=encoder_embedding_layer, encoder_layer=encoder_layer)
 
@@ -33,8 +33,8 @@ class Transformer(nn.Module):
             decoder_embedding_layer = TransformerEmbeddings(ntokens=ntoken[-1], emb_size=emb_size, dropout=dropout,
                                                             pad_token=pad_token)
 
-        decoder_layer = TransformerDecoderLayers(nlayers=nlayers, in_dim=emb_size, num_heads=num_heads, nhid=nhid)
-        projection_layer = Projection(out_dim=ntoken[-1], in_dim=emb_size, dropout=dropout,
+        decoder_layer = TransformerDecoderLayers(nlayers=nlayers, input_size=emb_size, num_heads=num_heads, nhid=nhid)
+        projection_layer = Projection(output_size=ntoken[-1], input_size=emb_size, dropout=dropout,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )
         self.decoder = TransformerDecoder(

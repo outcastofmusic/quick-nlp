@@ -8,7 +8,7 @@ from .basic_decoder import Decoder
 
 class AttentionDecoder(Decoder):
 
-    def _train_forward(self, inputs, hidden=None):
+    def _train_forward(self, inputs, hidden=None, constraints=None):
         sl, bs = inputs.size()
         emb = self.embedding_layer(inputs)
         layer_outputs = [[] for _ in range(self.nlayers)]
@@ -23,7 +23,7 @@ class AttentionDecoder(Decoder):
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         return outputs
 
-    def _beam_forward(self, inputs, hidden, num_beams):
+    def _beam_forward(self, inputs, hidden, num_beams, constraints=None):
         # ensure keys exist for all beams
         if self.projection_layer.keys is not None and num_beams > 0:
             self.projection_layer.keys = self.projection_layer.keys.repeat(1, num_beams, 1)

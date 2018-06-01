@@ -3,6 +3,7 @@ from typing import List, Union
 import torch
 import torch.nn as nn
 from fastai.lm_rnn import repackage_var
+
 from quicknlp.modules import DropoutEmbeddings, Encoder, RNNLayers, AttentionProjection, \
     AttentionDecoder
 from quicknlp.utils import assert_dims, get_kwarg, get_list
@@ -61,8 +62,8 @@ class HREDAttention(nn.Module):
                                                     dropouti=dropouti[0]
                                                     )
 
-        encoder_rnn = RNNLayers(in_dim=emb_sz[0],
-                                out_dim=kwargs.get("out_dim_encoder", emb_sz[0]),
+        encoder_rnn = RNNLayers(input_size=emb_sz[0],
+                                output_size=kwargs.get("output_size_encoder", emb_sz[0]),
                                 nhid=nhid[0], bidir=bidir,
                                 dropouth=dropouth[0],
                                 wdrop=wdrop[0],
@@ -74,8 +75,8 @@ class HREDAttention(nn.Module):
             encoder_layer=encoder_rnn
 
         )
-        self.session_encoder = RNNLayers(in_dim=encoder_rnn.out_dim, nhid=nhid[1],
-                                         out_dim=kwargs.get("out_dim", emb_sz[0]), nlayers=1,
+        self.session_encoder = RNNLayers(input_size=encoder_rnn.output_size, nhid=nhid[1],
+                                         output_size=kwargs.get("output_size", emb_sz[0]), nlayers=1,
                                          bidir=False, cell_type=self.cell_type,
                                          wdrop=wdrop[1], dropouth=dropouth[1],
                                          )
@@ -89,13 +90,13 @@ class HREDAttention(nn.Module):
                                                         dropouti=dropouti[1]
                                                         )
 
-        decoder_rnn = RNNLayers(in_dim=kwargs.get("in_dim", emb_sz[-1] * 2),
-                                out_dim=kwargs.get("out_dim", emb_sz[-1]),
+        decoder_rnn = RNNLayers(input_size=kwargs.get("input_size", emb_sz[-1] * 2),
+                                output_size=kwargs.get("output_size", emb_sz[-1]),
                                 nhid=nhid[-1], bidir=False, dropouth=dropouth[2],
                                 wdrop=wdrop[2], nlayers=nlayers[-1], cell_type=self.cell_type)
 
-        projection_layer = AttentionProjection(out_dim=ntoken[-1],
-                                               in_dim=emb_sz[-1],
+        projection_layer = AttentionProjection(output_size=ntoken[-1],
+                                               input_size=emb_sz[-1],
                                                dropout=dropoutd,
                                                att_nhid=att_nhid,
                                                att_type="SDP",

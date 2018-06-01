@@ -1,10 +1,10 @@
+import numpy as np
 import pytest
 import torch
-
 from fastai.core import V
-from quicknlp.utils import assert_dims, concat_bidir_state
+
 from quicknlp.modules.cell import Cell
-import numpy as np
+from quicknlp.utils import assert_dims, concat_bidir_state
 
 
 @pytest.mark.parametrize('mapping, dims',
@@ -37,7 +37,7 @@ def test_assert_fail_dims(mapping, dims):
         assert_dims(mapping, dims)
 
 
-@pytest.mark.parametrize('cell_type, in_dim, out_dim, bidir',
+@pytest.mark.parametrize('cell_type, input_size, output_size, bidir',
                          [
                              ("gru", 256, 256, True),
                              ("gru", 256, 256, False),
@@ -45,11 +45,12 @@ def test_assert_fail_dims(mapping, dims):
                              ("lstm", 256, 256, True),
                          ]
                          )
-def test_concat_bidirs(cell_type, in_dim, out_dim, bidir):
-    cell = Cell(cell_type=cell_type, input_size=in_dim, output_size=out_dim, bidir=bidir)
+def test_concat_bidirs(cell_type, input_size, output_size, bidir):
+    cell = Cell(cell_type=cell_type, input_size=input_size, output_size=output_size, bidir=bidir)
     cell.reset(bs=32)
     output = concat_bidir_state(cell.hidden, bidir=bidir, cell_type=cell_type, nlayers=1)
-    cell2 = Cell(cell_type=cell_type, input_size=in_dim, output_size=out_dim * 2 if bidir else out_dim, bidir=False)
+    cell2 = Cell(cell_type=cell_type, input_size=input_size, output_size=output_size * 2 if bidir else output_size,
+                 bidir=False)
     cell2.reset(bs=32)
     dec_state = cell2.hidden
     for layer_in, layer_out in zip(output, dec_state):

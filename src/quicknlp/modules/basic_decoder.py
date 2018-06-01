@@ -57,20 +57,24 @@ class Decoder(nn.Module):
     def reset(self, bs):
         self.decoder_layer.reset(bs)
 
-    def forward(self, inputs, hidden=None, num_beams=0):
+    def forward(self, inputs, hidden=None, num_beams=0, constraints=None):
         self.bs = inputs.size(1)
         if num_beams == 0:  # zero beams, a.k.a. teacher forcing
-            return self._train_forward(inputs, hidden)
+            return self._train_forward(inputs, hidden, constraints)
         elif num_beams == 1:  # one beam  a.k.a. greedy search
-            return self._greedy_forward(inputs, hidden)
+            return self._greedy_forward(inputs, hidden, constraints)
         elif num_beams > 1:  # multiple beams a.k.a topk search
-            return self._beam_forward(inputs, hidden, num_beams)
+            return self._beam_forward(inputs, hidden, num_beams, constraints)
 
-    def _beam_forward(self, inputs, hidden, num_beams):
-        return self._topk_forward(inputs, hidden, num_beams)
+    def _beam_forward(self, inputs, hidden, num_beams, constraints=None):
+        return self._topk_forward(inputs, hidden, num_beams, constraints)
 
-    def _train_forward(self, inputs, hidden=None):
+    def _train_forward(self, inputs, hidden=None, constraints=None):
         inputs = self.embedding_layer(inputs)
+        if constraints is not None:
+            # constraint should have dim bs, hd
+            # and inputs should be sl,bs,hd
+            inputs = torch.cat([inputs, constraints.unsqueeze(0)], dim=-1)
         # outputs are the outputs of every layer
         outputs = self.decoder_layer(inputs, hidden)
         # we project only the output of the last layer
@@ -78,7 +82,7 @@ class Decoder(nn.Module):
             outputs[-1] = self.projection_layer(outputs[-1])
         return outputs
 
-    def _greedy_forward(self, inputs, hidden=None):
+    def _greedy_forward(self, inputs, hidden=None, constraints=None):
         dec_inputs = inputs
         max_iterations = min(dec_inputs.size(0), self.MAX_STEPS_ALLOWED) if self.training else self.max_iterations
         inputs = V(inputs[:1].data)  # inputs should be only first token initially [1,bs]
@@ -91,7 +95,7 @@ class Decoder(nn.Module):
             # output should be List[[sl, bs, layer_dim], ...] sl should be one
             if 0 < iteration and self.training and 0. < self.random() < self.pr_force:
                 inputs = dec_inputs[iteration].unsqueeze(0)
-            output = self.forward(inputs, hidden=hidden, num_beams=0)
+            output = self.forward(inputs, hidden=hidden, num_beams=0, constraints=constraints)
             hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
@@ -109,7 +113,7 @@ class Decoder(nn.Module):
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         return outputs
 
-    def _topk_forward(self, inputs, hidden, num_beams):
+    def _topk_forward(self, inputs, hidden, num_beams, constraints=None):
         sl, bs = inputs.size()
         # initial logprobs should be zero (pr of <sos> token in the start is 1)
         logprobs = torch.zeros_like(inputs[:1]).view(1, bs, 1).float()  # shape will be [sl, bs, 1]
@@ -121,7 +125,7 @@ class Decoder(nn.Module):
         hidden = repeat_cell_state(hidden, num_beams)
         while not finished.all() and iteration < self.max_iterations:
             # output should be List[[sl, bs * num_beams, layer_dim], ...] sl should be one
-            output = self.forward(inputs, hidden=hidden, num_beams=0)
+            output = self.forward(inputs, hidden=hidden, num_beams=0, constraints=constraints)
             hidden = self.decoder_layer.hidden
             for layer_index in range(self.nlayers):
                 layer_outputs[layer_index].append(output[layer_index])
@@ -187,8 +191,8 @@ class Decoder(nn.Module):
         return self.decoder_layer.layers
 
     @property
-    def out_dim(self):
-        return self.projection_layer.out_dim if self.projection_layer is not None else self.decoder_layer.out_dim
+    def output_size(self):
+        return self.projection_layer.output_size if self.projection_layer is not None else self.decoder_layer.output_size
 
 
 class TransformerDecoder(Decoder):
@@ -198,7 +202,7 @@ class TransformerDecoder(Decoder):
         super().__init__(decoder_layer=decoder_layer, projection_layer=projection_layer, max_tokens=max_tokens,
                          eos_token=eos_token, pad_token=pad_token, embedding_layer=embedding_layer)
 
-    def _train_forward(self, inputs, hidden=None):
+    def _train_forward(self, inputs, hidden=None, constraints=None):
         inputs = self.embedding_layer(inputs)
         # outputs are the outputs of every layer
         outputs = self.decoder_layer(inputs, hidden)
@@ -207,7 +211,7 @@ class TransformerDecoder(Decoder):
             outputs[-1] = self.projection_layer(outputs[-1])
         return outputs
 
-    def _greedy_forward(self, inputs, hidden=None):
+    def _greedy_forward(self, inputs, hidden=None, constraints=None):
         inputs = inputs[:1]  # inputs should be only first token initially [1,bs]
         sl, bs = inputs.size()
         finished = to_gpu(torch.zeros(bs).byte())
@@ -233,7 +237,7 @@ class TransformerDecoder(Decoder):
         outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         return outputs
 
-    def _topk_forward(self, inputs, hidden, num_beams):
+    def _topk_forward(self, inputs, hidden, num_beams, constraints=None):
         sl, bs = inputs.size()
         # initial logprobs should be zero (pr of <sos> token in the start is 1)
         logprobs = torch.zeros_like(inputs[:1]).view(1, bs, 1).float()  # shape will be [sl, bs, 1]
