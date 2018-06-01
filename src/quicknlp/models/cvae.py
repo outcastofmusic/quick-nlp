@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from fastai.core import V, to_gpu
-from fastai.lm_rnn import repackage_var
 
 from quicknlp.utils import assert_dims, concat_bidir_state
 from .hred import HRED
@@ -34,6 +33,7 @@ class CVAE(HRED):
             pad_token (int): The  index of the token used for padding
             eos_token (int): The index of the token used for eos
             latent_dim (int): The dim of the latent variable
+            bow_nhid (int): The dim of the bow training network dimensions
             max_tokens (int): The maximum number of steps the decoder iterates before stopping
             share_embedding_layer (bool): if True the decoder shares its input and output embeddings
             tie_decoder (bool): if True the encoder and the decoder share their embeddings
@@ -73,27 +73,13 @@ class CVAE(HRED):
     def forward(self, *inputs, num_beams=0):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
-        bs = encoder_inputs.size(2)
+        num_utterances, max_sl, bs = encoder_inputs.size()
         self.query_encoder.reset(bs)
         self.se_enc.reset(bs)
-        query_encoder_outputs = []
-        state = self.query_encoder.hidden
-        for index, context in enumerate(encoder_inputs):
-            state = repackage_var(state)
-            outputs = self.query_encoder(context)  # context has size [sl, bs]
-            out = concat_bidir_state(self.query_encoder.encoder_layer.hidden[-1],
-                                     cell_type=self.cell_type, nlayers=1,
-                                     bidir=self.query_encoder.encoder_layer.bidir
-                                     )
-            # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
-            # the gradient backpropagation and fit it into memory
-            # to test before adding back
-            # out = repackage_var(
-            #     outputs[-1]) if num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[
-            #     -1]
-            query_encoder_outputs.append(out)  # get the last sl output of the query_encoder
-        query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
-        session_outputs = self.se_enc(query_encoder_outputs)
+        self.decoder.reset(bs)
+        query_encoder_outputs = self.query_level_encoding(encoder_inputs)
+
+        outputs = self.se_enc(query_encoder_outputs)
         session = self.se_enc.hidden[-1]
         self.query_encoder.reset(bs)
         decoder_outputs = self.query_encoder(decoder_inputs)
@@ -114,18 +100,12 @@ class CVAE(HRED):
             latent_sample = self.reparameterize(prior_mu, prior_log_var)
         session = torch.cat([session, latent_sample], dim=-1)
         bow_logits = self.bow_network(session).squeeze(0) if num_beams == 0 else None
-        self.decoder.reset(bs)
+
         state = self.decoder.hidden
         # if there are multiple layers we set the state to the first layer and ignore all others
-        state[0] = F.tanh(
-            self.decoder_state_linear(session))  # get the session_output of the last layer and the last step
-        if self.training:
-            self.decoder.pr_force = self.pr_force
-            nb = 1 if self.pr_force < 1 else 0
-        else:
-            nb = num_beams
-        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
-        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
+        # get the session_output of the last layer and the last step
+        state[0] = F.tanh(self.decoder_state_linear(session))
+        outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
         if num_beams == 0:
             return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*outputs, *outputs_dec]
         else:

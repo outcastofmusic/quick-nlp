@@ -6,7 +6,7 @@ from fastai.learner import Learner
 from fastai.torch_imports import save_model, load_model
 from torch.nn import functional as F
 
-from quicknlp.data.model_helpers import predict_with_seq2seq
+from quicknlp.data.model_helpers import predict_with_seq2seq, CVAEModel
 from quicknlp.stepper import S2SStepper
 
 
@@ -107,7 +107,11 @@ class EncoderDecoderLearner(Learner):
 
     def __init__(self, data, models, smoothing_factor=None, predict_first_token=False, **kwargs):
         super().__init__(data, models, **kwargs)
-        self.crit = partial(self.s2sloss, smoothing_factor=smoothing_factor, predict_first_token=predict_first_token)
+        if isinstance(models, CVAEModel):
+            self.crit = partial(cvae_loss, pad_idx=1)
+        else:
+            self.crit = partial(self.s2sloss, smoothing_factor=smoothing_factor,
+                                predict_first_token=predict_first_token)
         self.fit_gen = partial(self.fit_gen, stepper=S2SStepper)
 
     def save_encoder(self, name):

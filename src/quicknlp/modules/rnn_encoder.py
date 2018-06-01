@@ -19,7 +19,7 @@ class RNNLayers(nn.Module):
     """
 
     def __init__(self, input_size, output_size, nhid, nlayers, dropouth=0.3, wdrop=0.5, bidir=False, cell_type="lstm",
-                 train_init=False, **kwargs):
+                 train_init=False, dropoutinit=0.1, **kwargs):
         """ Default Constructor for the RNNLayers class
 
         Args:
@@ -31,6 +31,7 @@ class RNNLayers(nn.Module):
             wdrop (float): dropout used for a LSTM's internal (or hidden) recurrent weights.
             bidir (bool): If true the cell will be bidirectional
             train_init (bool): If true the initial states will be trainable
+            dropoutinit (float): The dropout to use in the initial states if trainable
             cell_type (str): Type of cell (default is LSTM)
         """
         super().__init__()
@@ -42,7 +43,7 @@ class RNNLayers(nn.Module):
                                                 nhid=nhid, bidir=bidir)
             layers.append(
                 Cell(cell_type=cell_type, input_size=inp_size, output_size=out_size,
-                     bidir=bidir, dropouth=0.0, wdrop=wdrop, train_init=train_init)
+                     bidir=bidir, dropouth=0.0, wdrop=wdrop, train_init=train_init, dropoutinit=dropoutinit)
             )
 
         self.layers = nn.ModuleList(layers)

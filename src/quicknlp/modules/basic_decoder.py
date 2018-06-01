@@ -72,9 +72,9 @@ class Decoder(nn.Module):
     def _train_forward(self, inputs, hidden=None, constraints=None):
         inputs = self.embedding_layer(inputs)
         if constraints is not None:
-            # constraint should have dim bs, hd
-            # and inputs should be sl,bs,hd
-            inputs = torch.cat([inputs, constraints.unsqueeze(0)], dim=-1)
+            # constraint should have dim [1, bs, hd]
+            # and inputs should be [sl,bs,hd]
+            inputs = torch.cat([inputs, constraints.repeat(inputs.size(0), 1, 1)], dim=-1)
         # outputs are the outputs of every layer
         outputs = self.decoder_layer(inputs, hidden)
         # we project only the output of the last layer

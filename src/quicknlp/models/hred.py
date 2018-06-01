@@ -51,7 +51,9 @@ class HRED(nn.Module):
         wdrop = get_kwarg(kwargs, name="wdrop", default_value=0.5)  # RNN weights dropout
         wdrop = get_list(wdrop, 3)
 
-        train_init = kwargs.pop("train_init", False)
+        train_init = kwargs.pop("train_init", False)  # Have trainable initial states to the RNNs
+        dropoutinit = get_kwarg(kwargs, name="dropoutinit", default_value=0.1)  # RNN initial states dropout
+        dropoutinit = get_list(dropoutinit, 3)
         self.cell_type = "gru"
         self.nt = ntoken[-1]
         self.pr_force = 1.0
@@ -69,7 +71,8 @@ class HRED(nn.Module):
                                 wdrop=wdrop[0],
                                 nlayers=nlayers[0],
                                 cell_type=self.cell_type,
-                                train_init=train_init
+                                train_init=train_init,
+                                dropoutinit=dropoutinit[0]
                                 )
         self.query_encoder = Encoder(
             embedding_layer=encoder_embedding_layer,
@@ -84,29 +87,30 @@ class HRED(nn.Module):
             nlayers=1,
             dropouth=dropouth[1],
             wdrop=wdrop[1],
-            train_init=train_init
-
+            train_init=train_init,
+            dropoutinit=dropoutinit[1]
         )
         if share_embedding_layer:
             decoder_embedding_layer = encoder_embedding_layer
         else:
-            decoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[-1],
-                                                        emb_size=emb_sz[-1],
+            decoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[0],
+                                                        emb_size=emb_sz[1],
                                                         dropoute=dropoute[1],
                                                         dropouti=dropouti[1]
                                                         )
 
-        decoder_rnn = RNNLayers(input_size=kwargs.get("input_size", emb_sz[-1]),
-                                output_size=kwargs.get("out_dim_decoder", emb_sz[-1]),
-                                nhid=nhid[-1], bidir=False, dropouth=dropouth[2],
-                                wdrop=wdrop[2], nlayers=nlayers[-1], cell_type=self.cell_type,
-                                train_init=train_init
+        decoder_rnn = RNNLayers(input_size=kwargs.get("input_size_decoder", emb_sz[1]),
+                                output_size=kwargs.get("output_size_decoder", emb_sz[1]),
+                                nhid=nhid[2], bidir=False, dropouth=dropouth[2],
+                                wdrop=wdrop[2], nlayers=nlayers[2], cell_type=self.cell_type,
+                                train_init=train_init,
+                                dropoutinit=dropoutinit[2]
                                 )
 
         # allow for changing sizes of decoder output
         input_size = decoder_rnn.output_size
-        nhid = emb_sz[-1] if input_size != emb_sz[-1] else None
-        projection_layer = Projection(output_size=ntoken[-1], input_size=input_size, nhid=nhid, dropout=dropoutd,
+        nhid = emb_sz[1] if input_size != emb_sz[1] else None
+        projection_layer = Projection(output_size=ntoken[0], input_size=input_size, nhid=nhid, dropout=dropoutd,
                                       tie_encoder=decoder_embedding_layer if tie_decoder else None
                                       )
         self.decoder = Decoder(
@@ -127,6 +131,25 @@ class HRED(nn.Module):
         self.query_encoder.reset(bs)
         self.se_enc.reset(bs)
         self.decoder.reset(bs)
+        query_encoder_outputs = self.query_level_encoding(encoder_inputs)
+        outputs = self.se_enc(query_encoder_outputs)
+        last_output = self.se_enc.hidden[-1]
+        state = self.decoder.hidden
+        state[0] = F.tanh(self.decoder_state_linear(last_output))
+        outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
+        return predictions, [*outputs, *outputs_dec]
+
+    def decoding(self, decoder_inputs, num_beams, state, constraints=None):
+        if self.training:
+            self.decoder.pr_force = self.pr_force
+            nb = 1 if self.pr_force < 1 else 0
+        else:
+            nb = num_beams
+        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb, constraints=constraints)
+        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
+        return outputs_dec, predictions
+
+    def query_level_encoding(self, encoder_inputs):
         query_encoder_outputs = []
         state = self.query_encoder.hidden
         for index, context in enumerate(encoder_inputs):
@@ -143,17 +166,4 @@ class HRED(nn.Module):
             #                        -1]) if max_sl * num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else \
             #    outputs[-1][-1]
         query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
-        # hidden = self.session_encoder.hidden
-        # outputs, last_output = self.session_encoder(query_encoder_outputs, hidden)
-        outputs = self.se_enc(query_encoder_outputs)
-        last_output = self.se_enc.hidden[-1]
-        state = self.decoder.hidden
-        state[0] = F.tanh(self.decoder_state_linear(last_output))
-        if self.training:
-            self.decoder.pr_force = self.pr_force
-            nb = 1 if self.pr_force < 1 else 0
-        else:
-            nb = num_beams
-        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
-        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
-        return predictions, [*outputs, *outputs_dec]
+        return query_encoder_outputs
