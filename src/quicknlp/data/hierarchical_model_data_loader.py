@@ -7,10 +7,10 @@ from fastai.dataset import ModelData
 from torch import optim
 from torchtext.data import Dataset, Field
 
+from quicknlp.data.torchtext_data_loaders import HierarchicalDataLoader
 from quicknlp.models import HRED
-from .learners import EncoderDecoderLearner
-from .data_loaders import HierarchicalDataLoader
 from .datasets import HierarchicalDatasetFromDataFrame, HierarchicalDatasetFromFiles
+from .learners import EncoderDecoderLearner
 from .model_helpers import HREDModel, PrintingMixin
 
 

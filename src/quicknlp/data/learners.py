@@ -10,30 +10,39 @@ from quicknlp.data.model_helpers import predict_with_seq2seq
 from quicknlp.stepper import S2SStepper
 
 
-def decoder_loss(input, target, pad_idx, **kwargs):
+def decoder_loss(input, target, pad_idx, predict_first_token=False, **kwargs):
     sl_in, bs_in, vocab = input.size()
     sl, bs = target.size()
-    if sl > sl_in: input = F.pad(input, (0, 0, 0, 0, 0, sl - sl_in))
+    # if the input size is smaller than the target fill it up with zeros (i.e. unks)
+    if sl > sl_in:
+        input = F.pad(input, (0, sl - sl_in, 0, 0, 0, 0), value=0)
     input = input[:sl]
+    if predict_first_token:
+        input = input[:1]
+        target = target[:1]
     return F.cross_entropy(input=input.view(-1, vocab),
                            target=target.view(-1),
                            ignore_index=pad_idx)
 
 
-def decoder_loss_smoothed(input, target, pad_idx, smoothing_factor=1., **kwargs):
+def decoder_loss_smoothed(input, target, pad_idx, smoothing_factor=0.9, loss_scale=1e4, **kwargs):
     sl_in, bs_in, vocab = input.size()
     sl, bs = target.size()
-    if sl > sl_in: input = F.pad(input, (0, 0, 0, 0, 0, sl - sl_in))
-    smoothing_factor = 1. / (vocab * 3) if smoothing_factor == 1.0 else smoothing_factor
-    targets = torch.zeros_like(input).scatter(2, target, 1 - (vocab - 1) / vocab)
-    targets = (targets + smoothing_factor)
+    # if the input size is smaller than the target fill it up with zeros (i.e. unks)
+    if sl > sl_in:
+        input = F.pad(input, (0, sl - sl_in, 0, 0, 0, 0), value=0.)
+    smoothing_pdf = (1. - smoothing_factor) / (vocab - 1.)
+    targets = torch.zeros_like(input).scatter(2, target.unsqueeze(-1), smoothing_factor - smoothing_pdf)
+    targets = (targets + smoothing_pdf)
     targets = targets.div(targets.sum(dim=-1).unsqueeze_(-1))
+    # weights = None
     weights = to_gpu(V(torch.ones(targets.size(-1)).view(1, 1, -1)))
     weights[..., pad_idx] = 0
+    input = F.log_softmax(input, dim=-1)
     return F.binary_cross_entropy_with_logits(input=input,
                                               target=targets,
                                               weight=weights
-                                              )
+                                              ) * loss_scale
 
 
 def gaussian_kld(recog_mu, recog_logvar, prior_mu, prior_logvar):
@@ -96,9 +105,9 @@ class EncoderDecoderLearner(Learner):
                                          **kwargs
                                          )
 
-    def __init__(self, data, models, smoothing_factor=None, **kwargs):
+    def __init__(self, data, models, smoothing_factor=None, predict_first_token=False, **kwargs):
         super().__init__(data, models, **kwargs)
-        self.crit = partial(self.s2sloss, smoothing_factor=smoothing_factor)
+        self.crit = partial(self.s2sloss, smoothing_factor=smoothing_factor, predict_first_token=predict_first_token)
         self.fit_gen = partial(self.fit_gen, stepper=S2SStepper)
 
     def save_encoder(self, name):

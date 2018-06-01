@@ -19,7 +19,7 @@ class RNNLayers(nn.Module):
     """
 
     def __init__(self, in_dim, out_dim, nhid, nlayers, dropouth=0.3, wdrop=0.5, bidir=False, cell_type="lstm",
-                 **kwargs):
+                 train_init=False, **kwargs):
         """ Default Constructor for the RNNLayers class
 
         Args:
@@ -29,21 +29,23 @@ class RNNLayers(nn.Module):
             nlayers (int): number of layers to use in the architecture
             dropouth (float): dropout to apply to the activations going from one  layer to another
             wdrop (float): dropout used for a LSTM's internal (or hidden) recurrent weights.
+            bidir (bool): If true the cell will be bidirectional
+            train_init (bool): If true the initial states will be trainable
             cell_type (str): Type of cell (default is LSTM)
         """
         super().__init__()
-        self.layers = []
+        layers = []
         for layer_index in range(nlayers):
             input_size, output_size = get_layer_dims(layer_index=layer_index, total_layers=nlayers,
                                                      in_dim=in_dim,
                                                      out_dim=out_dim,
                                                      nhid=nhid, bidir=bidir)
-            self.layers.append(
+            layers.append(
                 Cell(cell_type=cell_type, input_size=input_size, output_size=output_size,
-                     bidir=bidir, dropouth=0.0, wdrop=wdrop)
+                     bidir=bidir, dropouth=0.0, wdrop=wdrop, train_init=train_init)
             )
 
-        self.layers = nn.ModuleList(self.layers)
+        self.layers = nn.ModuleList(layers)
         self.in_dim, self.out_dim, self.nhid, self.nlayers, self.bidir = in_dim, out_dim, nhid, nlayers, bidir
         self.dropouths = nn.ModuleList([LockedDropout(dropouth) for l in range(nlayers)])
         self.hidden, self.weights = None, None
@@ -52,7 +54,7 @@ class RNNLayers(nn.Module):
     def forward(self, input_tensor, hidden=None):
         """ Invoked during the forward propagation of the RNN_Encoder module.
         Args:
-            input_tensor (Tensor): input of shape (batch_size x sentence length)
+            input_tensor (Tensor): input of shape [sentence_length, batch_size, hidden_dim]
             hidden (List[Tensor]: state  of the encoder
 
         Returns:
@@ -62,7 +64,7 @@ class RNNLayers(nn.Module):
             The outputs should have dims [sl,bs,layer_dims]
         """
         # we reset at very batch as they are not sequential (like a languagemodel)
-        output = input_tensor
+        output = input_tensor  # sl, bs, ed
         self.hidden = self.hidden if hidden is None else hidden
         new_hidden, outputs = [], []
         for layer_index, (rnn, drop) in enumerate(zip(self.layers, self.dropouths)):
@@ -81,7 +83,6 @@ class RNNLayers(nn.Module):
         self.hidden = [self.layers[l].hidden_state(bs) for l in range(self.nlayers)]
 
     def reset(self, bs):
-        self.weights = next(self.parameters()).data
         self.reset_hidden(bs)
 
     def hidden_shape(self, bs):

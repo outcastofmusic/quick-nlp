@@ -4,8 +4,8 @@ from torch.optim import Adam
 from torchtext.data import Field
 
 from quicknlp.data import TabularDatasetFromFiles
-from quicknlp.data.data_loaders import S2SDataLoader
 from quicknlp.data.s2s_model_data_loader import S2SModelData
+from quicknlp.data.torchtext_data_loaders import S2SDataLoader
 from quicknlp.utils import assert_dims
 
 HAVE_TEST = [True, False]

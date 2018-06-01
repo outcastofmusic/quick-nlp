@@ -48,12 +48,12 @@ def concat_layer_bidir_state(states: States, bidir, cell_type):
 
 
 def concat_bidir_state(states: States, bidir: bool, cell_type: str, nlayers: int) -> States:
-    if nlayers == 1:
-        state = concat_layer_bidir_state(states, bidir=bidir, cell_type=cell_type)
-    else:
+    if isinstance(states, list):
         state = []
-        for index in range(nlayers):
+        for index in range(len(states)):
             state.append(concat_layer_bidir_state(states[index], bidir=bidir, cell_type=cell_type))
+    else:
+        state = concat_layer_bidir_state(states, bidir=bidir, cell_type=cell_type)
     return state
 
 

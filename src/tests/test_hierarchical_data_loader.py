@@ -1,4 +1,4 @@
-from quicknlp.data.data_loaders import HierarchicalDataLoader
+from quicknlp.data.torchtext_data_loaders import HierarchicalDataLoader
 
 
 def test_hierarchical_data_loader(hierarchical_dataset):

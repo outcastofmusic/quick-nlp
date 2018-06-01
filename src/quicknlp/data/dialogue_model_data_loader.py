@@ -6,11 +6,11 @@ from fastai.dataset import ModelData
 from torch import optim
 from torchtext.data import Dataset, Field
 
+from quicknlp.data.torchtext_data_loaders import DialogueTTDataLoader
 from quicknlp.models import CVAE, HRED
 from quicknlp.models.hred_attention import HREDAttention
-from .learners import EncoderDecoderLearner, cvae_loss
-from .data_loaders import DialogueDataLoader
 from .datasets import DialogueDataset
+from .learners import EncoderDecoderLearner, cvae_loss
 from .model_helpers import CVAEModel, HREDModel, PrintingMixin, HREDAttentionModel
 
 
@@ -58,8 +58,8 @@ class HREDModelData(ModelData, PrintingMixin):
         self.pad_idx = text_field.vocab.stoi[text_field.pad_token]
         self.eos_idx = text_field.vocab.stoi[text_field.eos_token]
 
-        trn_dl, val_dl, test_dl = [DialogueDataLoader(ds, bs, target_names=target_names,
-                                                      max_context_size=max_context_size, backwards=backwards)
+        trn_dl, val_dl, test_dl = [DialogueTTDataLoader(ds, bs, target_names=target_names,
+                                                        max_context_size=max_context_size, backwards=backwards)
                                    if ds is not None else None
                                    for ds in (trn_ds, val_ds, test_ds)]
         super().__init__(path=path, trn_dl=trn_dl, val_dl=val_dl, test_dl=test_dl)

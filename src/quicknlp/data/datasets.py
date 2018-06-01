@@ -9,6 +9,8 @@ from typing import Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+import torch
+from fastai.core import A
 from torchtext.data import Dataset, Example, Field
 from tqdm import tqdm
 
@@ -105,7 +107,7 @@ def df_to_dialogue_examples(df: pd.DataFrame, *, fields: List[Tuple[str, Field]]
 def json_to_dialogue_examples(path_dir: Path, *, fields: List[Tuple[str, Field]], utterance_key: str, role_key: str,
                               text_key: str, sort_key: str, max_sl: int = 1000,
                               target_roles: Optional[List[str]] = None) -> \
-    Iterator[Example]:
+        Iterator[Example]:
     """Load dialogues from json files
     a json file should have a List of Dicts, see examples:
      [{batch_col:chat_id, utterance_col:[{text_col:message, role_col:role, sort_col:timestamp}]}]
@@ -331,3 +333,15 @@ class DialDataset(Dataset):
 
     def __len__(self):
         return len(self.c)
+
+
+class HREDDataset(torch.utils.data.Dataset):
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+    def __getitem__(self, idx):
+        return A(np.atleast_2d(self.x[idx]), self.y[idx],
+                 np.hstack((self.y[idx][1:], np.asarray([2]))))
+
+    def __len__(self):
+        return len(self.x)

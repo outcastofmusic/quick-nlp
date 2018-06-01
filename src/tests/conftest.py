@@ -6,9 +6,9 @@ from torchtext.data import Field
 
 from quicknlp import HierarchicalModelData
 from quicknlp.data import TabularDatasetFromFiles
-from quicknlp.data.data_loaders import S2SDataLoader
 from quicknlp.data.datasets import HierarchicalDatasetFromDataFrame
 from quicknlp.data.s2s_model_data_loader import S2SModelData
+from quicknlp.data.torchtext_data_loaders import S2SDataLoader
 
 TRAIN_DATA = \
     """hello\tbonjour\tGuten Tag

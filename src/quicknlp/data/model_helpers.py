@@ -76,7 +76,7 @@ class S2SModel(BasicModel):
 
 class HREDModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
-        return [self.model.query_encoder, self.model.session_encoder, self.model.decoder_state_linear,
+        return [self.model.query_encoder, self.model.se_enc, self.model.decoder_state_linear,
                 self.model.decoder]
 
 
@@ -88,7 +88,7 @@ class HREDAttentionModel(BasicModel):
 class CVAEModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
         return [self.model.query_encoder,
-                self.model.session_encoder,
+                self.model.se_enc,
                 self.model.prior_network,
                 self.model.recognition_network,
                 self.model.bow_network,

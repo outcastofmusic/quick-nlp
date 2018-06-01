@@ -7,10 +7,10 @@ from fastai.dataset import ModelData
 from torch import optim
 from torchtext.data import Dataset, Field
 
+from quicknlp.data.torchtext_data_loaders import S2SDataLoader
 from quicknlp.models import Seq2Seq, Seq2SeqAttention, Transformer
-from .data_loaders import S2SDataLoader
-from .learners import EncoderDecoderLearner
 from .datasets import NamedField, TabularDatasetFromDataFrame, TabularDatasetFromFiles
+from .learners import EncoderDecoderLearner
 from .model_helpers import PrintingMixin, S2SModel, check_columns_in_df
 
 

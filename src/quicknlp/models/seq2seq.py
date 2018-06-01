@@ -30,7 +30,7 @@ class Seq2Seq(nn.Module):
         # allow for the same or different parameters between encoder and decoder
         ntoken, emb_sz, nhid, nlayers = get_list(ntoken, 2), get_list(emb_sz, 2), get_list(nhid, 2), get_list(nlayers,
                                                                                                               2)
-        dropoutd = get_kwarg(kwargs, name="dropoutd", default_value=0.5)  # output dropout
+        dropoutd = get_kwarg(kwargs, name="dropout_d", default_value=0.5)  # output dropout
         dropoute = get_kwarg(kwargs, name="dropout_e", default_value=0.1)  # encoder embedding dropout
         dropoute = get_list(dropoute, 2)
         dropouti = get_kwarg(kwargs, name="dropout_i", default_value=0.65)  # input dropout

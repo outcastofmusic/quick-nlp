@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastai.core import V, to_gpu
 
-from quicknlp.utils import assert_dims
+from quicknlp.utils import assert_dims, concat_bidir_state
 from .hred import HRED
 
 HParam = Union[List[int], int]
@@ -47,20 +47,20 @@ class CVAE(HRED):
                          tie_decoder=tie_decoder, bidir=bidir
                          )
         self.latent_dim = latent_dim
-        self.recognition_network = nn.Linear(in_features=self.session_encoder.out_dim + self.query_encoder.out_dim,
+        self.recognition_network = nn.Linear(in_features=self.se_enc.out_dim + self.query_encoder.out_dim,
                                              out_features=latent_dim * 2)
         self.prior_network = nn.Sequential(
-            nn.Linear(in_features=self.session_encoder.out_dim, out_features=latent_dim),
+            nn.Linear(in_features=self.se_enc.out_dim, out_features=latent_dim),
             nn.Tanh(),
             nn.Linear(in_features=latent_dim, out_features=latent_dim * 2)
         )
-        self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.session_encoder.out_dim,
+        self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.se_enc.out_dim,
                                                    out_features=bow_nhid),
                                          nn.Tanh(),
                                          nn.Dropout(p=kwargs.get('dropout_b', 0.2)),
                                          nn.Linear(in_features=bow_nhid, out_features=self.decoder.out_dim)
                                          )
-        self.decoder_state_linear = nn.Linear(in_features=self.session_encoder.out_dim + latent_dim,
+        self.decoder_state_linear = nn.Linear(in_features=self.se_enc.out_dim + latent_dim,
                                               out_features=self.decoder.layers[0].output_size)
 
     def reparameterize(self, mu, logvar):
@@ -75,24 +75,28 @@ class CVAE(HRED):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
         bs = encoder_inputs.size(2)
-        self.session_encoder.reset(bs)
+        self.se_enc.reset(bs)
         query_encoder_outputs, outputs = [], []
         for index, context in enumerate(encoder_inputs):
             self.query_encoder.reset(bs)
             outputs = self.query_encoder(context)  # context has size [sl, bs]
+            out = concat_bidir_state(self.query_encoder.encoder_layer.hidden[-1],
+                                     cell_type=self.cell_type, nlayers=1,
+                                     bidir=self.query_encoder.encoder_layer.bidir
+                                     )
             # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
             # the gradient backpropagation and fit it into memory
             # to test before adding back
             # out = repackage_var(
             #     outputs[-1]) if num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else outputs[
             #     -1]
-            query_encoder_outputs.append(outputs[-1][-1])  # get the last sl output of the query_encoder
-        query_encoder_outputs = torch.stack(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
-        session_outputs = self.session_encoder(query_encoder_outputs)
-        session = session_outputs[-1][-1:]
+            query_encoder_outputs.append(out)  # get the last sl output of the query_encoder
+        query_encoder_outputs = torch.cat(query_encoder_outputs, dim=0)  # [cl, bs, nhid]
+        session_outputs = self.se_enc(query_encoder_outputs)
+        session = session_outputs.hidden[-1]
         self.query_encoder.reset(bs)
         decoder_outputs = self.query_encoder(decoder_inputs)
-        x = torch.cat([session, decoder_outputs[-1][-1:]], dim=-1)
+        x = torch.cat([session, decoder_outputs.hidden[-1]], dim=-1)
         recog_mu_log_var = self.recognition_network(x)
         recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.latent_dim, dim=-1)
 

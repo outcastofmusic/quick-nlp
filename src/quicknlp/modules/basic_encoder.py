@@ -9,7 +9,7 @@ class Encoder(nn.Module):
         self.encoder_layer = encoder_layer
 
     def forward(self, input_tensor, state=None):
-        ed = self.embedding_layer(input_tensor)
+        ed = self.embedding_layer(input_tensor)  # dims [sl,bs,ed]
         return self.encoder_layer(ed, state)
 
     def reset(self, bs):
