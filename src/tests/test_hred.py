@@ -2,8 +2,8 @@ import pytest
 from fastai.core import V, to_gpu
 from torch.optim import Adam
 
-from quicknlp.data.model_helpers import HREDModel
 from quicknlp.data.learners import decoder_loss
+from quicknlp.data.model_helpers import HREDModel
 from quicknlp.models import HRED
 from quicknlp.utils import get_trainable_parameters
 
@@ -45,4 +45,4 @@ def test_hred_training_parameters(model, hredmodel):
 def test_hred_encoder_decoder_model(model):
     enc_dec_model = HREDModel(model)
     groups = enc_dec_model.get_layer_groups()
-    assert len(groups) == 4
+    assert len(groups) == 1

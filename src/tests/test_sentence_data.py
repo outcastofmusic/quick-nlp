@@ -27,8 +27,8 @@ def test_S2SModelLoader(s2smodel_data):
     assert len(ml) == 200
     index = 0
     for index, (*X, Y) in enumerate(ml):
-        assert_dims(X, [2, None, bs])
-        assert_dims(Y, [None, bs])
+        assert_dims(X, [2, None, (1, bs)])
+        assert_dims(Y, [None, (1, bs)])
 
         assert X[1].shape[0] == Y.shape[0] + 1
 

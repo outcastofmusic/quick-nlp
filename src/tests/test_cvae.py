@@ -2,9 +2,9 @@ import pytest
 from fastai.core import V, to_gpu
 from torch.optim import Adam
 
+from quicknlp.data.learners import cvae_loss
 from quicknlp.data.model_helpers import CVAEModel
 from quicknlp.models import CVAE
-from quicknlp.data.learners import cvae_loss
 from quicknlp.utils import get_trainable_parameters
 
 params = [(True), (False)]
@@ -45,4 +45,4 @@ def test_cvae_training_parameters(model, hredmodel):
 def test_cvae_encoder_decoder_model(model):
     enc_dec_model = CVAEModel(model)
     groups = enc_dec_model.get_layer_groups()
-    assert len(groups) == 7
+    assert len(groups) == 1

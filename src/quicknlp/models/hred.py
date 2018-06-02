@@ -131,7 +131,8 @@ class HRED(nn.Module):
         outputs = self.se_enc(query_encoder_outputs)
         last_output = self.se_enc.hidden[-1]
         # state = [F.tanh(self.decoder_state_linear(last_output))] # Tanh seems to deteriorate performance so not used
-        state = [self.decoder_state_linear(last_output)]
+        state = self.decoder.hidden
+        state[0] = self.decoder_state_linear(last_output)
         outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
         return predictions, [*outputs, *outputs_dec]
 

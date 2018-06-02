@@ -6,7 +6,7 @@ from quicknlp.data.datasets import HierarchicalDatasetFromDataFrame
 
 def test_tabular_dataset_from_dataframe(hierarchical_data):
     path, train, valid, test = hierarchical_data
-    df = pd.read_csv(path / train / "data.tsv", header=None, sep="\t")
+    df = pd.read_csv(path / train / "data.csv", header=None)
     df.columns = ["chat_id", "timestamp", "text", "role"]
     field = Field(pad_token="__pad__", init_token="__init__", eos_token="__eos__", lower=True)
     # When I create a hierarchical Dataset

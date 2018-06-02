@@ -1,4 +1,3 @@
-import io
 import json
 import os
 import pickle
@@ -24,24 +23,16 @@ class TabularDatasetFromFiles(Dataset):
     """
 
     def get_examples_from_file(self, path: str, fields: List[NamedField], format: str, encoding: str = 'utf-8',
-                               skip_header: bool = False) -> Tuple[List[Example], List[NamedField]]:
-        # Code Taken from TabularDataset initialization
-        make_example = {
-            'json': Example.fromJSON, 'dict': Example.fromdict,
-            'tsv': Example.fromTSV, 'csv': Example.fromCSV}[format.lower()]
-
-        with io.open(os.path.expanduser(path), encoding=encoding) as f:
-            if skip_header:
-                next(f)
-            examples = [make_example(line.strip(), fields) for line in f]
-
-        if make_example in (Example.fromdict, Example.fromJSON):
-            fields, field_dict = [], fields
-            for field in field_dict.values():
-                if isinstance(field, list):
-                    fields.extend(field)
-                else:
-                    fields.append(field)
+                               skip_header: bool = True) -> Tuple[List[Example], List[NamedField]]:
+        if format.lower() in ["csv", "tsv"]:
+            sep = "," if format.lower() == "csv" else "\t"
+            data = pd.read_csv(os.path.expanduser(path), encoding=encoding, header=0 if skip_header else None,
+                               sep=sep)
+        elif format.lower() == "json":
+            data = pd.read_json(os.path.expanduser(path), encoding=encoding)
+        examples = []
+        for _, row in data.iterrows():
+            examples.append(Example.fromlist(row.values.tolist(), fields))
         return examples, fields
 
     def __init__(self, path: str, fields: List[NamedField], encoding: str = 'utf-8', skip_header: bool = False,
@@ -306,7 +297,7 @@ class ContextResponseDataset(Dataset):
         return len(self.x)
 
 
-class DialDataset(torch.utils.data.Dataset):
+class DialDataset(Dataset):
     def __init__(self, context: List[List[int]], response: List[int], pad: int, label: Optional[int] = None,
                  backwards=False,
                  sos: Optional[int] = None,

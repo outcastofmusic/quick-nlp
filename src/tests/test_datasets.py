@@ -24,7 +24,7 @@ def test_TabularDatasetFromFiles(s2smodel_data):
 
 def test_TabularDatasetFromDataFrame(s2smodel_data):
     path, train, valid, test = s2smodel_data
-    df = pd.read_csv(path / train / "data.tsv", header=None, sep="\t")
+    df = pd.read_csv(path / train / "data.csv", header=None)
     df.columns = ["english", "french", "german"]
     df['random_column'] = "N/A"
     fields = [
