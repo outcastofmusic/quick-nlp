@@ -11,7 +11,7 @@ from quicknlp.modules.cell import Cell
                            ])
 def test_cell(cell_type, hidden_type):
     sl, bs, input_size, output_size = 8, 10, 12, 14
-    cell = Cell(cell_type, input_size, output_size, dropouth=0.0, wdrop=0.0)
+    cell = Cell(cell_type, input_size, output_size, dropout=0.0, wdrop=0.0)
     cell = to_gpu(cell)
     inputs = V(tr.rand(sl, bs, input_size))
     hidden = cell.hidden_state(bs)

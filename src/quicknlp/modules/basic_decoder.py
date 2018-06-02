@@ -169,7 +169,7 @@ class Decoder(nn.Module):
             mask = torch.zeros_like(new_logprobs).fill_(-1e32).view(1, bs * num_beams, num_tokens)
             f = V(finished.unsqueeze(0))
             # set the pad_token position to the last logprob for the finished ones
-            mask[..., self.pad_token] = logprobs
+            mask[..., self.pad_token] = logprobs.view(1, bs * num_beams)
             # mask shape = [1, bs * nb (that are finished), nt]
             mask = mask.masked_select(f.unsqueeze(-1)).view(1, -1, num_tokens)
             # replace the rows of the finished ones with the mask

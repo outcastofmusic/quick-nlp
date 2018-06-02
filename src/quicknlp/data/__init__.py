@@ -1,6 +1,6 @@
 from .data_loaders import DialogueDataLoader
 from .datasets import DialogueDataset, HierarchicalDatasetFromDataFrame, HierarchicalDatasetFromFiles, \
-    TabularDatasetFromDataFrame, TabularDatasetFromFiles, DialDataset, HREDDataset
+    TabularDatasetFromDataFrame, TabularDatasetFromFiles, DialDataset, HREDDataset, HREDConstraintsDataset
 from .dialogue_analysis import DialogueAnalysis
 from .dialogue_model_data_loader import CVAEModelData, HREDModelData, HREDAttentionModelData
 from .hierarchical_model_data_loader import HierarchicalModelData

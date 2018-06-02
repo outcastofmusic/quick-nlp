@@ -306,7 +306,7 @@ class ContextResponseDataset(Dataset):
         return len(self.x)
 
 
-class DialDataset(Dataset):
+class DialDataset(torch.utils.data.Dataset):
     def __init__(self, context: List[List[int]], response: List[int], pad: int, label: Optional[int] = None,
                  backwards=False,
                  sos: Optional[int] = None,
@@ -341,6 +341,18 @@ class HREDDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         return A(np.atleast_2d(self.x[idx]), self.y[idx],
+                 np.hstack((self.y[idx][1:], np.asarray([2]))))
+
+    def __len__(self):
+        return len(self.x)
+
+
+class HREDConstraintsDataset(torch.utils.data.Dataset):
+    def __init__(self, x, c, y):
+        self.x, self.c, self.y = x, c, y
+
+    def __getitem__(self, idx):
+        return A(np.atleast_2d(self.x[idx]), self.c[idx], self.y[idx],
                  np.hstack((self.y[idx][1:], np.asarray([2]))))
 
     def __len__(self):

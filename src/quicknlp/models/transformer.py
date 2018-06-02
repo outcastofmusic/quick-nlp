@@ -49,7 +49,7 @@ class Transformer(nn.Module):
         # xavier uniform initialization
         for p in self.parameters():
             if p.dim() > 1:
-                nn.init.xavier_uniform(p)
+                nn.init.xavier_uniform_(p)
 
     def forward(self, *inputs, num_beams=0):
 

@@ -43,7 +43,7 @@ class RNNLayers(nn.Module):
                                                 nhid=nhid, bidir=bidir)
             layers.append(
                 Cell(cell_type=cell_type, input_size=inp_size, output_size=out_size,
-                     bidir=bidir, dropouth=0.0, wdrop=wdrop, train_init=train_init, dropoutinit=dropoutinit)
+                     bidir=bidir, wdrop=wdrop, train_init=train_init, dropoutinit=dropoutinit)
             )
 
         self.layers = nn.ModuleList(layers)

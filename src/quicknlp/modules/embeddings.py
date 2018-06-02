@@ -49,7 +49,7 @@ class DropoutEmbeddings(nn.Module):
     initrange = 0.1
 
     def __init__(self, ntokens, emb_size, dropoute=0.1, dropouti=0.65, pad_token=None):
-        """ Default Constructor for the DropoutEmbeddingr class
+        """ Default Constructor for the DropoutEmbeddings class
 
         Args:
             ntokens (int): number of vocabulary (or tokens) in the source dataset

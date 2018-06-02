@@ -2,8 +2,6 @@ from typing import List, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from fastai.lm_rnn import repackage_var
 
 from quicknlp.modules import Decoder, DropoutEmbeddings, Encoder, Projection, RNNLayers
 from quicknlp.utils import assert_dims, get_kwarg, get_list, concat_bidir_state
@@ -52,7 +50,7 @@ class HRED(nn.Module):
         wdrop = get_list(wdrop, 3)
 
         train_init = kwargs.pop("train_init", False)  # Have trainable initial states to the RNNs
-        dropoutinit = get_kwarg(kwargs, name="dropoutinit", default_value=0.1)  # RNN initial states dropout
+        dropoutinit = get_kwarg(kwargs, name="dropout_init", default_value=0.1)  # RNN initial states dropout
         dropoutinit = get_list(dropoutinit, 3)
         self.cell_type = "gru"
         self.nt = ntoken[-1]
@@ -65,7 +63,7 @@ class HRED(nn.Module):
                                                     )
 
         encoder_rnn = RNNLayers(input_size=emb_sz[0],
-                                output_size=kwargs.get("out_dim_encoder", emb_sz[0]),
+                                output_size=kwargs.get("output_size_encoder", emb_sz[0]),
                                 nhid=nhid[0], bidir=bidir,
                                 dropouth=dropouth[0],
                                 wdrop=wdrop[0],
@@ -128,16 +126,19 @@ class HRED(nn.Module):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
         num_utterances, max_sl, bs = encoder_inputs.size()
-        self.query_encoder.reset(bs)
-        self.se_enc.reset(bs)
-        self.decoder.reset(bs)
+        self.reset_encoders(bs)
         query_encoder_outputs = self.query_level_encoding(encoder_inputs)
         outputs = self.se_enc(query_encoder_outputs)
         last_output = self.se_enc.hidden[-1]
-        state = self.decoder.hidden
-        state[0] = F.tanh(self.decoder_state_linear(last_output))
+        # state = [F.tanh(self.decoder_state_linear(last_output))] # Tanh seems to deteriorate performance so not used
+        state = [self.decoder_state_linear(last_output)]
         outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
         return predictions, [*outputs, *outputs_dec]
+
+    def reset_encoders(self, bs):
+        self.query_encoder.reset(bs)
+        self.se_enc.reset(bs)
+        self.decoder.reset(bs)
 
     def decoding(self, decoder_inputs, num_beams, state, constraints=None):
         if self.training:
@@ -151,17 +152,17 @@ class HRED(nn.Module):
 
     def query_level_encoding(self, encoder_inputs):
         query_encoder_outputs = []
-        state = self.query_encoder.hidden
         for index, context in enumerate(encoder_inputs):
-            state = repackage_var(state)
+            self.query_encoder.reset(bs=encoder_inputs.size(2))
+            state = self.query_encoder.hidden
             outputs = self.query_encoder(context, state)  # context has size [sl, bs]
-            # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
-            # the gradient backpropagation and fit it into memory
             out = concat_bidir_state(self.query_encoder.encoder_layer.hidden[-1],
                                      cell_type=self.cell_type, nlayers=1,
                                      bidir=self.query_encoder.encoder_layer.bidir
                                      )
             query_encoder_outputs.append(out)  # get the last sl output of the query_encoder
+            # BPTT if the dialogue is too long repackage the first half of the outputs to decrease
+            # the gradient backpropagation and fit it into memory
             # out = repackage_var(outputs[-1][
             #                        -1]) if max_sl * num_utterances > self.BPTT_MAX_UTTERANCES and index <= num_utterances // 2 else \
             #    outputs[-1][-1]

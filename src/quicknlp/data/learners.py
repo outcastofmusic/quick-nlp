@@ -62,7 +62,7 @@ def cvae_loss(input, target, pad_idx, step=0, max_kld_step=None, **kwargs):
     target = target.view(-1).contiguous()
     bow_loss = F.cross_entropy(input=bow_targets.view(-1, vocab), target=target, ignore_index=pad_idx,
                                reduce=False).view(-1, bs)
-    bow_loss = bow_loss.sum(0).mean()
+    bow_loss = bow_loss.mean()
     # targets are sq-1 times bs (one label for every word)
     kld_loss = gaussian_kld(recog_mu, recog_log_var, prior_mu, prior_log_var)
     decoder_loss = F.cross_entropy(input=dec_input,

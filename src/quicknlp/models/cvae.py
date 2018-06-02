@@ -2,7 +2,6 @@ from typing import List, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from fastai.core import V, to_gpu
 
 from quicknlp.utils import assert_dims, concat_bidir_state
@@ -74,9 +73,7 @@ class CVAE(HRED):
         encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
         # reset the states for the new batch
         num_utterances, max_sl, bs = encoder_inputs.size()
-        self.query_encoder.reset(bs)
-        self.se_enc.reset(bs)
-        self.decoder.reset(bs)
+        self.reset_encoders(bs)
         query_encoder_outputs = self.query_level_encoding(encoder_inputs)
 
         outputs = self.se_enc(query_encoder_outputs)
@@ -104,7 +101,7 @@ class CVAE(HRED):
         state = self.decoder.hidden
         # if there are multiple layers we set the state to the first layer and ignore all others
         # get the session_output of the last layer and the last step
-        state[0] = F.tanh(self.decoder_state_linear(session))
+        state[0] = self.decoder_state_linear(session)
         outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
         if num_beams == 0:
             return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*outputs, *outputs_dec]

@@ -76,8 +76,17 @@ class S2SModel(BasicModel):
 
 class HREDModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
-        return [self.model.query_encoder, self.model.se_enc, self.model.decoder_state_linear,
-                self.model.decoder]
+        return [self.model]
+        # layers = [self.model.query_encoder.embedding_layer, self.model.query_encoder.encoder_layer,
+        #           self.model.se_enc, self.model.decoder_state_linear]
+        # if self.model.decoder.embedding_layer is not self.model.query_encoder.embedding_layer:
+        #     layers += [self.model.decoder.embedding_layer]
+        # layers += [self.model.decoder.decoder_layer]
+        # if len(self.model.decoder.projection_layer.layers) > 2:
+        #     layers += [self.model.decoder.projection_layer.layers[:2]]
+        # if self.model.decoder.projection_layer.layers[-1] is not self.model.decoder.embedding_layer:
+        #     layers += [self.model.decoder.projection_layer.layers[-1]]
+        # return layers
 
 
 class HREDAttentionModel(BasicModel):
@@ -87,9 +96,10 @@ class HREDAttentionModel(BasicModel):
 
 class CVAEModel(BasicModel):
     def get_layer_groups(self, do_fc=False):
-        return [self.model.query_encoder,
-                self.model.se_enc,
-                self.model.prior_network,
-                self.model.recognition_network,
-                self.model.bow_network,
-                self.model.decoder_state_linear, self.model.decoder]
+        return [self.model]
+        # return [self.model.query_encoder,
+        #         self.model.se_enc,
+        #         self.model.prior_network,
+        #         self.model.recognition_network,
+        #         self.model.bow_network,
+        #         self.model.decoder_state_linear, self.model.decoder]

@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fastai.core import V
+from fastai.core import to_gpu
 from fastai.rnn_reg import WeightDrop
 from torch.nn import Parameter
 
@@ -11,18 +11,18 @@ from torch.nn import Parameter
 class Cell(nn.Module):
     """GRU or LSTM cell with withdrop. Can also be bidirectional and have trainable initial state"""
 
-    def __init__(self, cell_type, input_size, output_size, dropouth=0.3, wdrop=0.5, dropoutinit=0.1, bidir=False,
+    def __init__(self, cell_type, input_size, output_size, dropout=0.0, wdrop=0.0, dropoutinit=0.0, bidir=False,
                  train_init=False):
-        super(Cell, self).__init__()
+        super().__init__()
         self.cell_type = cell_type.lower()
         self.bidir = bidir
         self.input_size = input_size
         self.output_size = output_size
         self.dropoutinit = dropoutinit
         if self.cell_type == "lstm":
-            self.cell = nn.LSTM(input_size, output_size, num_layers=1, bidirectional=bidir, dropout=dropouth)
+            self.cell = nn.LSTM(input_size, output_size, num_layers=1, bidirectional=bidir, dropout=dropout)
         elif self.cell_type == "gru":
-            self.cell = nn.GRU(input_size, output_size, num_layers=1, bidirectional=bidir, dropout=dropouth)
+            self.cell = nn.GRU(input_size, output_size, num_layers=1, bidirectional=bidir, dropout=dropout)
         else:
             raise NotImplementedError(f"cell: {cell_type} not supported")
         if wdrop:
@@ -87,15 +87,14 @@ class Cell(nn.Module):
 
     def one_hidden(self, bs=1, cell_state=False):
         ndir = 2 if self.bidir else 1
-        init_state = V(torch.ones(ndir, bs, self.output_size))
         if not self.train_init:
-            init_state.fill_(0.)
+            init_state = to_gpu(torch.zeros(ndir, bs, self.output_size))
         elif cell_state:
-            state = F.dropout(self.init_cell_state, p=self.dropoutinit, training=self.training)
-            init_state = state * init_state
+            init_state = F.dropout(self.init_cell_state, p=self.dropoutinit, training=self.training)
+            init_state.repeat(1, bs, 1)
         else:
-            state = F.dropout(self.init_state, p=self.dropoutinit, training=self.training)
-            init_state = state * init_state
+            init_state = F.dropout(self.init_state, p=self.dropoutinit, training=self.training)
+            return init_state.repeat(1, bs, 1)
         return init_state
 
     def hidden_state(self, bs):
