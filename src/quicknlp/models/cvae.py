@@ -85,17 +85,7 @@ class CVAE(HRED):
                                          bidir=self.query_encoder.encoder_layer.bidir
                                          )
         x = torch.cat([session, decoder_out], dim=-1)
-        recog_mu_log_var = self.recognition_network(x)
-        recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.latent_dim, dim=-1)
-
-        prior_mu_log_var = self.prior_network(session)
-        prior_mu, prior_log_var = torch.split(prior_mu_log_var, self.latent_dim, dim=-1)
-
-        if self.training:
-            latent_sample = self.reparameterize(recog_mu, recog_log_var)
-        else:
-            latent_sample = self.reparameterize(prior_mu, prior_log_var)
-        session = torch.cat([session, latent_sample], dim=-1)
+        prior_log_var, prior_mu, recog_log_var, recog_mu, session = self.variational_encoding(session, x)
         bow_logits = self.bow_network(session).squeeze(0) if num_beams == 0 else None
 
         state = self.decoder.hidden
@@ -107,3 +97,15 @@ class CVAE(HRED):
             return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*outputs, *outputs_dec]
         else:
             return predictions, [*outputs, *outputs_dec]
+
+    def variational_encoding(self, session, x):
+        recog_mu_log_var = self.recognition_network(x)
+        recog_mu, recog_log_var = torch.split(recog_mu_log_var, self.latent_dim, dim=-1)
+        prior_mu_log_var = self.prior_network(session)
+        prior_mu, prior_log_var = torch.split(prior_mu_log_var, self.latent_dim, dim=-1)
+        if self.training:
+            latent_sample = self.reparameterize(recog_mu, recog_log_var)
+        else:
+            latent_sample = self.reparameterize(prior_mu, prior_log_var)
+        session = torch.cat([session, latent_sample], dim=-1)
+        return prior_log_var, prior_mu, recog_log_var, recog_mu, session
