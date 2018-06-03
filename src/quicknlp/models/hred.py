@@ -20,7 +20,7 @@ class HRED(nn.Module):
 
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
-                 bidir: bool = False, **kwargs):
+                 bidir: bool = False, session_constraint: bool = False, **kwargs):
         """
 
         Args:
@@ -34,6 +34,7 @@ class HRED(nn.Module):
             share_embedding_layer (bool): if True the decoder shares its input and output embeddings
             tie_decoder (bool): if True the encoder and the decoder share their embeddings
             bidir (bool): if True use a bidirectional encoder
+            session_constraint (bool) If true the session will be concated as a constraint to the decoder input
             **kwargs: Extra embeddings that will be passed to the encoder and the decoder
         """
         super().__init__()
@@ -97,14 +98,16 @@ class HRED(nn.Module):
                                                         dropouti=dropouti[1]
                                                         )
 
-        decoder_rnn = RNNLayers(input_size=kwargs.get("input_size_decoder", emb_sz[1]),
+        input_size_decoder = kwargs.get("input_size_decoder", emb_sz[1])
+        input_size_decoder = input_size_decoder + self.se_enc.output_size if session_constraint else input_size_decoder
+        decoder_rnn = RNNLayers(input_size=input_size_decoder,
                                 output_size=kwargs.get("output_size_decoder", emb_sz[1]),
                                 nhid=nhid[2], bidir=False, dropouth=dropouth[2],
                                 wdrop=wdrop[2], nlayers=nlayers[2], cell_type=self.cell_type,
                                 train_init=train_init,
                                 dropoutinit=dropoutinit[2]
                                 )
-
+        self.session_constraint = session_constraint
         # allow for changing sizes of decoder output
         input_size = decoder_rnn.output_size
         nhid = emb_sz[1] if input_size != emb_sz[1] else None
@@ -130,10 +133,11 @@ class HRED(nn.Module):
         query_encoder_outputs = self.query_level_encoding(encoder_inputs)
         outputs = self.se_enc(query_encoder_outputs)
         last_output = self.se_enc.hidden[-1]
-        # state = [F.tanh(self.decoder_state_linear(last_output))] # Tanh seems to deteriorate performance so not used
         state = self.decoder.hidden
-        state[0] = self.decoder_state_linear(last_output)
-        outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
+        # Tanh seems to deteriorate performance so not used
+        state[0] = self.decoder_state_linear(last_output)  # .tanh()
+        constraints = last_output if self.session_constraint else None  # dims  [1, bs, ed]
+        outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
         return predictions, [*outputs, *outputs_dec]
 
     def reset_encoders(self, bs):

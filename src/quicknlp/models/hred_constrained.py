@@ -1,3 +1,4 @@
+import torch
 from typing import List, Union
 
 from quicknlp.modules import DropoutEmbeddings
@@ -53,10 +54,13 @@ class HREDConstrained(HRED):
         query_encoder_outputs = self.query_level_encoding(encoder_inputs)
         outputs = self.se_enc(query_encoder_outputs)
         last_output = self.se_enc.hidden[-1]
-        state = [self.decoder_state_linear(last_output)]
+        state = self.decoder.hidden
+        # Tanh seems to deteriorate performance so not used
+        state[0] = self.decoder_state_linear(last_output)  # .tanh()
         # get as a  constraint the second token of the targets
 
         constraints = self.constraint_embeddings(constraints)  # dims [bs, ed]
+        constraints = torch.cat([last_output, constraints], dim=-1) if self.session_constraint else constraints
 
         outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
         return predictions, [*outputs, *outputs_dec]

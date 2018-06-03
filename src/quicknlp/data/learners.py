@@ -70,7 +70,15 @@ def cvae_loss(input, target, pad_idx, step=0, max_kld_step=None, **kwargs):
                                    ignore_index=pad_idx,
                                    )
     kld_weight = 1.0 if max_kld_step is None else min((step + 1) / max_kld_step, 1)
+    global STEP
+    if step > STEP:
+        if step == 0: STEP = 0
+        print(f"\nlosses: decoder {decoder_loss}, bow: {bow_loss}, kld x weight: {kld_loss} x {kld_weight}")
+        STEP += 1
     return decoder_loss + bow_loss + kld_loss * kld_weight
+
+
+STEP = 0
 
 
 def cvae_loss_sigmoid(input, target, pad_idx, step=0, max_kld_step=None, **kwargs):
@@ -92,6 +100,12 @@ def cvae_loss_sigmoid(input, target, pad_idx, step=0, max_kld_step=None, **kwarg
                                    ignore_index=pad_idx,
                                    )
     kld_weight = 1.0 if max_kld_step is None else min((step + 1) / max_kld_step, 1)
+    global STEP
+    if step > STEP:
+        if step == 0: STEP = 0
+        print(f"losses: decoder {decoder_loss}, bow: {bow_loss}, kld x weight: {kld_loss} x {kld_weight}")
+        STEP += 1
+
     return decoder_loss + bow_loss + kld_loss * kld_weight
 
 
