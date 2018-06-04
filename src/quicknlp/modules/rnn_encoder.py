@@ -47,7 +47,8 @@ class RNNLayers(nn.Module):
             )
 
         self.layers = nn.ModuleList(layers)
-        self.input_size, self.output_size, self.nhid, self.nlayers, self.bidir = input_size, output_size, nhid, nlayers, bidir
+        self.input_size, self.output_size, self.nhid, self.nlayers = input_size, output_size, nhid, nlayers
+        self.cell_type, self.bidir = cell_type, bidir
         self.dropouths = nn.ModuleList([LockedDropout(dropouth) for l in range(nlayers)])
         self.hidden, self.weights = None, None
         self.reset(1)
@@ -91,3 +92,6 @@ class RNNLayers(nn.Module):
             return [self.layers[l].hidden_state(bs)[0].shape for l in range(self.nlayers)]
         else:
             return [self.layers[l].hidden_state(bs).shape for l in range(self.nlayers)]
+
+    def get_last_hidden_state(self):
+        return self.hidden[-1][0] if self.cell_type == "lstm" else self.hidden[-1]

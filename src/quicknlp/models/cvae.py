@@ -39,11 +39,10 @@ class CVAE(HRED):
             bidir (bool): if True use a bidirectional encoder
             **kwargs: Extra embeddings that will be passed to the encoder and the decoder
         """
-
+        assert kwargs.get("cell_type") == "gru", "lstm not supported"
         super().__init__(ntoken=ntoken, emb_sz=emb_sz, nhid=nhid, nlayers=nlayers, pad_token=pad_token,
                          eos_token=eos_token, max_tokens=max_tokens, share_embedding_layer=share_embedding_layer,
-                         tie_decoder=tie_decoder, bidir=bidir
-                         )
+                         tie_decoder=tie_decoder, bidir=bidir)
         self.latent_dim = latent_dim
         self.recognition_network = nn.Linear(in_features=self.se_enc.output_size + self.query_encoder.output_size,
                                              out_features=latent_dim * 2)
@@ -88,10 +87,7 @@ class CVAE(HRED):
         prior_log_var, prior_mu, recog_log_var, recog_mu, session = self.variational_encoding(session, x)
         bow_logits = self.bow_network(session).squeeze(0) if num_beams == 0 else None
 
-        state = self.decoder.hidden
-        # if there are multiple layers we set the state to the first layer and ignore all others
-        # get the session_output of the last layer and the last step
-        state[0] = self.decoder_state_linear(session)
+        state, constraints = self.map_session_hidden_state_to_decoder_init_state(session)
         outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
         if num_beams == 0:
             return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*outputs, *outputs_dec]

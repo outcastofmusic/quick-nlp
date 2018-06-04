@@ -105,3 +105,6 @@ class Cell(nn.Module):
 
     def reset(self, bs=1):
         self.hidden = self.hidden_state(bs=bs)
+
+    def get_hidden_state(self):
+        return self.hidden[0] if self.cell_type == "lstm" else self.hidden

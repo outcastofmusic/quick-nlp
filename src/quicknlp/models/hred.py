@@ -20,7 +20,7 @@ class HRED(nn.Module):
 
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, max_tokens: int = 50, share_embedding_layer: bool = False, tie_decoder: bool = True,
-                 bidir: bool = False, session_constraint: bool = False, **kwargs):
+                 bidir: bool = False, session_constraint: bool = False, cell_type="gru", **kwargs):
         """
 
         Args:
@@ -53,7 +53,7 @@ class HRED(nn.Module):
         train_init = kwargs.pop("train_init", False)  # Have trainable initial states to the RNNs
         dropoutinit = get_kwarg(kwargs, name="dropout_init", default_value=0.1)  # RNN initial states dropout
         dropoutinit = get_list(dropoutinit, 3)
-        self.cell_type = "gru"
+        self.cell_type = cell_type
         self.nt = ntoken[-1]
         self.pr_force = 1.0
 
@@ -133,12 +133,23 @@ class HRED(nn.Module):
         query_encoder_outputs = self.query_level_encoding(encoder_inputs)
         outputs = self.se_enc(query_encoder_outputs)
         last_output = self.se_enc.hidden[-1]
-        state = self.decoder.hidden
-        # Tanh seems to deteriorate performance so not used
-        state[0] = self.decoder_state_linear(last_output)  # .tanh()
-        constraints = last_output if self.session_constraint else None  # dims  [1, bs, ed]
+        state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
         outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
         return predictions, [*outputs, *outputs_dec]
+
+    def map_session_hidden_state_to_decoder_init_state(self, last_output):
+        state = self.decoder.hidden
+        # if there are multiple layers we set the state to the first layer and ignore all others
+        # get the session_output of the last layer and the last step
+        if self.cell_type == "gru":
+            # Tanh seems to deteriorate performance so not used as a nonlinear
+            state[0] = self.decoder_state_linear(last_output)  # .tanh()
+            constraints = last_output if self.session_constraint else None  # dims  [1, bs, ed]
+        else:
+            # Tanh seems to deteriorate performance so not used as a nonlinear
+            state[0] = self.decoder_state_linear(last_output[0]), self.decoder_state_linear(last_output[1])
+            constraints = last_output[0] if self.session_constraint else None  # dims  [1, bs, ed]
+        return state, constraints
 
     def reset_encoders(self, bs):
         self.query_encoder.reset(bs)
@@ -161,7 +172,7 @@ class HRED(nn.Module):
             self.query_encoder.reset(bs=encoder_inputs.size(2))
             state = self.query_encoder.hidden
             outputs = self.query_encoder(context, state)  # context has size [sl, bs]
-            out = concat_bidir_state(self.query_encoder.encoder_layer.hidden[-1],
+            out = concat_bidir_state(self.query_encoder.encoder_layer.get_last_hidden_state(),
                                      cell_type=self.cell_type, nlayers=1,
                                      bidir=self.query_encoder.encoder_layer.bidir
                                      )

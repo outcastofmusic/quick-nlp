@@ -37,13 +37,13 @@ class RandomUniform:
         return rand
 
 
-def concat_layer_bidir_state(states: States, bidir, cell_type):
-    if cell_type == "lstm" and bidir:
+def concat_layer_bidir_state(states: States, bidir):
+    if isinstance(states, (list, tuple)) and bidir: # lstm case
         return (states[0].transpose(1, 0).contiguous().view(1, -1, 2 * states[0].size(-1)),
                 states[1].transpose(1, 0).contiguous().view(1, -1, 2 * states[1].size(-1)))
-    elif cell_type == "gru" and bidir:
+    elif bidir: # gru case
         return states.transpose(1, 0).contiguous().view(1, -1, 2 * states[0].size(-1))
-    elif cell_type in ['lstm', 'gru'] and not bidir:
+    else:
         return states
 
 
@@ -51,9 +51,9 @@ def concat_bidir_state(states: States, bidir: bool, cell_type: str, nlayers: int
     if isinstance(states, list):
         state = []
         for index in range(len(states)):
-            state.append(concat_layer_bidir_state(states[index], bidir=bidir, cell_type=cell_type))
+            state.append(concat_layer_bidir_state(states[index], bidir=bidir))
     else:
-        state = concat_layer_bidir_state(states, bidir=bidir, cell_type=cell_type)
+        state = concat_layer_bidir_state(states, bidir=bidir)
     return state
 
 
