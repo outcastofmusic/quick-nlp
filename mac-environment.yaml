@@ -1,8 +1,8 @@
 name: pytorch-venv
 channels:
   - pytorch
-  - conda-forge
   - defaults
+  - conda-forge
 dependencies:
   - jupyter_contrib_core
   - jupyter_contrib_nbextensions
@@ -13,6 +13,7 @@ dependencies:
   - lesscpy
   - asn1crypto
   - attrs
+  - beautifulsoup4
   - bleach
   - ca-certificates
   - certifi
@@ -31,6 +32,7 @@ dependencies:
   - fontconfig
   - freetype
   - ftfy
+  - gensim
   - glib
   - gmp
   - html5lib
@@ -148,7 +150,6 @@ dependencies:
     - autopep8
     - awscli
     - bcolz
-    - beautifulsoup4
     - boto
     - boto3
     - botocore
@@ -159,11 +160,8 @@ dependencies:
     - configparser
     - cssselect
     - docutils
-    - en-core-web-sm
-    - fastai
     - feather-format
     - fr-core-news-sm
-    - gensim
     - graphviz
     - isoweek
     - jmespath
@@ -187,5 +185,4 @@ dependencies:
     - sklearn-pandas
     - smart-open
     - stevedore
-    - torch
     - torchtext

@@ -11,6 +11,5 @@ setup(name='quicknlp',
       packages=find_packages(where='src'),
       package_dir={'': 'src'},
       python_requires=">=3.6",
-      install_requires=['fastai', 'pandas', 'numpy', 'torchtext', 'spacy'],
       tests_require=['pytest', 'pytest-mock'],
       )

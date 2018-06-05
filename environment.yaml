@@ -132,6 +132,7 @@ dependencies:
   - thinc
   - tk
   - toolz
+  - torch
   - tornado
   - tqdm
   - traitlets
@@ -167,7 +168,6 @@ dependencies:
     - en-core-web-sm
     - fastai
     - feather-format
-    - fr-core-news-sm
     - gensim
     - graphviz
     - isoweek
@@ -192,5 +192,4 @@ dependencies:
     - sklearn-pandas
     - smart-open
     - stevedore
-    - torch
     - torchtext
