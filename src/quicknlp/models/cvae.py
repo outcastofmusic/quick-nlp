@@ -20,7 +20,7 @@ class CVAE(HRED):
     def __init__(self, ntoken: int, emb_sz: HParam, nhid: HParam, nlayers: HParam, pad_token: int,
                  eos_token: int, latent_dim: int, bow_nhid: int, max_tokens: int = 50,
                  share_embedding_layer: bool = False,
-                 tie_decoder: bool = True,
+                 tie_decoder: bool = True, cell_type="gru",
                  bidir: bool = False, **kwargs):
         """
 
@@ -39,10 +39,10 @@ class CVAE(HRED):
             bidir (bool): if True use a bidirectional encoder
             **kwargs: Extra embeddings that will be passed to the encoder and the decoder
         """
-        assert kwargs.get("cell_type") == "gru", "lstm not supported"
+        assert cell_type == "gru", "lstm not supported"
         super().__init__(ntoken=ntoken, emb_sz=emb_sz, nhid=nhid, nlayers=nlayers, pad_token=pad_token,
                          eos_token=eos_token, max_tokens=max_tokens, share_embedding_layer=share_embedding_layer,
-                         tie_decoder=tie_decoder, bidir=bidir)
+                         tie_decoder=tie_decoder, bidir=bidir, cell_type=cell_type, **kwargs)
         self.latent_dim = latent_dim
         self.recognition_network = nn.Linear(in_features=self.se_enc.output_size + self.query_encoder.output_size,
                                              out_features=latent_dim * 2)

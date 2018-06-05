@@ -4,7 +4,6 @@ from fastai.core import V
 
 from quicknlp.utils import assert_dims, get_list
 from .attention import MultiHeadAttention
-from .layer_norm import LayerNorm
 
 
 class PositionFeedForward(nn.Module):
@@ -29,10 +28,10 @@ class SubLayer(nn.Module):
     def __init__(self, input_size):
         super().__init__()
         self.input_size = input_size,
-        self.layer_norm = LayerNorm(self.input_size)
+        self.layer_norm = nn.LayerNorm(self.input_size)
 
     def forward(self, input_tensor, sublayer):
-        return input_tensor + sublayer(self.layer_norm(input_tensor))
+        return input_tensor.add(sublayer(self.layer_norm(input_tensor)))
 
 
 class AttentionLayer(nn.Module):

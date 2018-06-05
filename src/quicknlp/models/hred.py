@@ -56,6 +56,8 @@ class HRED(nn.Module):
         self.cell_type = cell_type
         self.nt = ntoken[-1]
         self.pr_force = 1.0
+        self.share_embedding_layer = share_embedding_layer
+        self.tie_decoder = tie_decoder
 
         encoder_embedding_layer = DropoutEmbeddings(ntokens=ntoken[0],
                                                     emb_size=emb_sz[0],
