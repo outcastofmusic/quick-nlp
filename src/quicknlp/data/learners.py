@@ -1,12 +1,12 @@
 from functools import partial
 
 import torch
-from fastai.core import to_gpu, V, T
+from fastai.core import T, V, to_gpu
 from fastai.learner import Learner
-from fastai.torch_imports import save_model, load_model
+from fastai.torch_imports import load_model, save_model
 from torch.nn import functional as F
 
-from quicknlp.data.model_helpers import predict_with_seq2seq, CVAEModel
+from quicknlp.data.model_helpers import CVAEModel, predict_with_seq2seq
 from quicknlp.stepper import S2SStepper
 
 
@@ -25,24 +25,18 @@ def decoder_loss(input, target, pad_idx, predict_first_token=False, **kwargs):
                            ignore_index=pad_idx)
 
 
-def decoder_loss_smoothed(input, target, pad_idx, smoothing_factor=0.9, loss_scale=1e4, **kwargs):
+def decoder_loss_label_smoothing(input, target, pad_idx, confidence=0.9, **kwargs):
     sl_in, bs_in, vocab = input.size()
     sl, bs = target.size()
     # if the input size is smaller than the target fill it up with zeros (i.e. unks)
     if sl > sl_in:
         input = F.pad(input, (0, sl - sl_in, 0, 0, 0, 0), value=0.)
-    smoothing_pdf = (1. - smoothing_factor) / (vocab - 1.)
-    targets = torch.zeros_like(input).scatter(2, target.unsqueeze(-1), smoothing_factor - smoothing_pdf)
+    smoothing_pdf = (1. - confidence) / (vocab - 2)  # we subtract the confidence token and the pad token from the vocab
+    targets = torch.zeros_like(input).scatter(2, target.unsqueeze(-1), confidence - smoothing_pdf)
     targets = (targets + smoothing_pdf)
-    targets = targets.div(targets.sum(dim=-1).unsqueeze_(-1))
-    # weights = None
-    weights = to_gpu(V(torch.ones(targets.size(-1)).view(1, 1, -1)))
-    weights[..., pad_idx] = 0
-    input = F.log_softmax(input, dim=-1)
-    return F.binary_cross_entropy_with_logits(input=input,
-                                              target=targets,
-                                              weight=weights
-                                              ) * loss_scale
+    targets.div_(targets.sum(dim=-1).unsqueeze_(-1))
+    targets[..., pad_idx] = 0.  # padding targets are set to 0
+    return F.kl_div(input, targets, size_average=False)
 
 
 def gaussian_kld(recog_mu, recog_logvar, prior_mu, prior_logvar):
@@ -149,13 +143,14 @@ def get_cvae_loss(pad_idx, tchebycheff=False, sigmoid=False, tbc_weights=None, t
 
 class EncoderDecoderLearner(Learner):
 
-    def s2sloss(self, input, target, smoothing_factor=None, pad_idx=1, **kwargs):
-        if smoothing_factor is None:
+    def s2sloss(self, input, target, label_smoothing_confidence=None, pad_idx=1, **kwargs):
+        if label_smoothing_confidence is None:
             return decoder_loss(input=input, target=target, pad_idx=pad_idx, **kwargs)
         else:
-            return decoder_loss_smoothed(input=input, target=target, smoothing_factor=smoothing_factor, pad_idx=pad_idx,
-                                         **kwargs
-                                         )
+            return decoder_loss_label_smoothing(input=input, target=target, confidence=label_smoothing_confidence,
+                                                pad_idx=pad_idx,
+                                                **kwargs
+                                                )
 
     def __init__(self, data, models, smoothing_factor=None, predict_first_token=False, **kwargs):
         tchebycheff_loss = kwargs.pop("tchebycheff", False)
