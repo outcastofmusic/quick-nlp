@@ -36,7 +36,9 @@ def decoder_loss_label_smoothing(input, target, pad_idx, confidence=0.9, **kwarg
     targets = (targets + smoothing_pdf)
     targets.div_(targets.sum(dim=-1).unsqueeze_(-1))
     targets[..., pad_idx] = 0.  # padding targets are set to 0
-    return F.kl_div(input, targets, size_average=False)
+    input = F.log_softmax(input,dim=-1)
+    # we sum over the sequence lengths and get the mean
+    return F.kl_div(input, targets, size_average=False,reduce=False).sum(dim=-1).mean()
 
 
 def gaussian_kld(recog_mu, recog_logvar, prior_mu, prior_logvar):
