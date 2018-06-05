@@ -152,7 +152,7 @@ class EncoderDecoderLearner(Learner):
                                                 **kwargs
                                                 )
 
-    def __init__(self, data, models, smoothing_factor=None, predict_first_token=False, **kwargs):
+    def __init__(self, data, models, label_smoothing_confidence=None, predict_first_token=False, **kwargs):
         tchebycheff_loss = kwargs.pop("tchebycheff", False)
         super().__init__(data, models, **kwargs)
         if isinstance(models, CVAEModel):
@@ -160,7 +160,7 @@ class EncoderDecoderLearner(Learner):
                                       sigmoid=kwargs.get("sigmoid", False),
                                       )
         else:
-            self.crit = partial(self.s2sloss, smoothing_factor=smoothing_factor,
+            self.crit = partial(self.s2sloss, label_smoothing_confidence=label_smoothing_confidence,
                                 predict_first_token=predict_first_token)
         self.fit_gen = partial(self.fit_gen, stepper=S2SStepper)
 
