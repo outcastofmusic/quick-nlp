@@ -1,5 +1,6 @@
-import torch
 from typing import List, Union
+
+import torch
 
 from quicknlp.modules import DropoutEmbeddings
 from quicknlp.utils import get_kwarg, get_list
@@ -51,10 +52,7 @@ class HREDConstrained(HRED):
         # reset the states for the new batch
         num_utterances, max_sl, bs = encoder_inputs.size()
         self.reset_encoders(bs)
-        query_encoder_outputs = self.query_level_encoding(encoder_inputs)
-        outputs = self.se_enc(query_encoder_outputs)
-        last_output = self.se_enc.hidden[-1]
-
+        outputs, last_output = self.encoder(encoder_inputs)
         state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
         # get as a  constraint the second token of the targets
         constraints = self.constraint_embeddings(constraints)  # dims [bs, ed]

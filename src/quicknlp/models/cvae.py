@@ -44,20 +44,21 @@ class CVAE(HRED):
                          eos_token=eos_token, max_tokens=max_tokens, share_embedding_layer=share_embedding_layer,
                          tie_decoder=tie_decoder, bidir=bidir, cell_type=cell_type, **kwargs)
         self.latent_dim = latent_dim
-        self.recognition_network = nn.Linear(in_features=self.se_enc.output_size + self.query_encoder.output_size,
-                                             out_features=latent_dim * 2)
+        self.recognition_network = nn.Linear(
+            in_features=self.encoder.output_size + self.encoder.query_encoder.output_size,
+            out_features=latent_dim * 2)
         self.prior_network = nn.Sequential(
-            nn.Linear(in_features=self.se_enc.output_size, out_features=latent_dim),
+            nn.Linear(in_features=self.encoder.output_size, out_features=latent_dim),
             nn.Tanh(),
             nn.Linear(in_features=latent_dim, out_features=latent_dim * 2)
         )
-        self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.se_enc.output_size,
+        self.bow_network = nn.Sequential(nn.Linear(in_features=latent_dim + self.encoder.output_size,
                                                    out_features=bow_nhid),
                                          nn.Tanh(),
                                          nn.Dropout(p=kwargs.get('dropout_b', 0.2)),
                                          nn.Linear(in_features=bow_nhid, out_features=self.decoder.output_size)
                                          )
-        self.decoder_state_linear = nn.Linear(in_features=self.se_enc.output_size + latent_dim,
+        self.decoder_state_linear = nn.Linear(in_features=self.encoder.output_size + latent_dim,
                                               out_features=self.decoder.layers[0].output_size)
 
     def reparameterize(self, mu, logvar):
@@ -73,15 +74,12 @@ class CVAE(HRED):
         # reset the states for the new batch
         num_utterances, max_sl, bs = encoder_inputs.size()
         self.reset_encoders(bs)
-        query_encoder_outputs = self.query_level_encoding(encoder_inputs)
-
-        outputs = self.se_enc(query_encoder_outputs)
-        session = self.se_enc.hidden[-1]
-        self.query_encoder.reset(bs)
-        decoder_outputs = self.query_encoder(decoder_inputs)
-        decoder_out = concat_bidir_state(self.query_encoder.encoder_layer.hidden[-1],
+        outputs, session = self.encoder(encoder_inputs)
+        self.encoder.query_encoder.reset(bs)
+        decoder_outputs = self.encoder.query_encoder(decoder_inputs)
+        decoder_out = concat_bidir_state(self.encoder.query_encoder_layer.get_last_hidden_state(),
                                          cell_type=self.cell_type, nlayers=1,
-                                         bidir=self.query_encoder.encoder_layer.bidir
+                                         bidir=self.encoder.bidir
                                          )
         x = torch.cat([session, decoder_out], dim=-1)
         prior_log_var, prior_mu, recog_log_var, recog_mu, session = self.variational_encoding(session, x)
