@@ -37,7 +37,7 @@ def decoder_loss_label_smoothing(input, target, pad_idx, confidence=0.9, **kwarg
     targets.div_(targets.sum(dim=-1).unsqueeze_(-1))
     targets[..., pad_idx] = 0.  # padding targets are set to 0
     input = F.log_softmax(input,dim=-1)
-    # we sum over the sequence lengths and get the mean
+    # we sum over the vocab length and get the mean
     return F.kl_div(input, targets, size_average=False,reduce=False).sum(dim=-1).mean()
 
 
