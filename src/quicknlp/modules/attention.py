@@ -59,7 +59,7 @@ class MultiHeadAttention(nn.Module):
 
     def __init__(self, num_heads, nhid, keys_dim, query_dim, values_dim, dropout=0.0, out_dim=None):
         super().__init__()
-        self.dropout = LockedDropout(dropout) if dropout > 0.0 else None
+        self.dropout = nn.Dropout(dropout) if dropout > 0.0 else None
         self.num_heads = num_heads
         self.nhid = nhid
         self.linear_out_dim = self.nhid * num_heads
@@ -71,25 +71,27 @@ class MultiHeadAttention(nn.Module):
         self.linear = nn.Linear(in_features=self.linear_out_dim, out_features=self.out_dim, bias=False)
 
     def forward(self, query, keys, values, mask=None):
-        # Query dim [bs, dimQ]
-        # keys dim [sl, bs, dimK]
+        # Query dim [sl, bs, dimQ]
+        # keys dim [slQ, bs, dimK]
         # values dim [sl, bs, dimV]
-
-        # [bs, dimH *NH]
-        query_projection = self.query_linear(query)
         sl, bs, dimK = keys.size()
-        # [sl, bs, dimH *NH]
-        keys_projection = self.keys_linear(keys)
-        # [sl, bs, dimH *NH]
-        values_projection = self.values_linear(values)
+        slq = query.size(0)
+        # [slQ, bs, dimH *NH] - > [bs, NH, slQ, dimH]
+        query_projection = self.query_linear(query).view(slq, bs, self.num_heads, self.nhid).permute(1, 2, 0, 3)
+        # [sl, bs, dimH *NH] -> [bs, NH, dimH, sl]
+        keys_projection = self.keys_linear(keys).view(sl, bs, self.num_heads, self.nhid).permute(1, 2, 3, 0)
+        # [sl, bs, dimH *NH] -> [bs, NH, sl, dimH]
+        values_projection = self.values_linear(values).view(sl, bs, self.num_heads, self.nhid).permute(1, 2, 0, 3)
 
-        scores = (query_projection * keys_projection).view(sl, bs, self.num_heads, self.nhid).sum(
-            dim=-1).contiguous() / self.scale
+        # [bs, NH, slQ, dimH] x [bs, NH, dimH, sl] =  [bs, NH, slQ, sl]
+        scores = query_projection @ keys_projection
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e20)
-        weights = F.softmax(scores, dim=0)
+        weights = F.softmax(scores, dim=-1)
         if self.dropout is not None:
             weights = self.dropout(weights)
-        attention = (weights.unsqueeze(-1) * values_projection.view(sl, bs, self.num_heads, self.nhid)).sum(0)
-        output = self.linear(attention.view(bs, -1))
-        return assert_dims(output, [bs, self.out_dim])
+
+        #  [bs, NH, slQ, sl] x  [bs, NH, sl, dimH] =  [bs, NH, slQ, dimH] -> [slQ, bs, NH * dimH]
+        attention = (weights @ values_projection).permute(2, 0, 1, 3).contiguous().view(slq, bs, self.num_heads * self.nhid)
+        output = self.linear(attention)
+        return assert_dims(output, [slq, bs, self.out_dim])

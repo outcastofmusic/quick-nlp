@@ -1,6 +1,5 @@
-import torch as tr
 import torch.nn as nn
-from fastai.core import V
+from fastai.core import T, np
 
 from quicknlp.utils import assert_dims, get_list
 from .attention import MultiHeadAttention
@@ -45,19 +44,14 @@ class AttentionLayer(nn.Module):
                                             query_dim=self.input_size,
                                             dropout=dropout)
 
+    def causal_mask(self, bs, sl):
+        return T(np.tril(np.ones((bs, self.num_heads, sl, sl)))).float()
+
     def forward(self, input_tensor, keys_vector, values_vector, mask=False):
-        self_attention_outputs = []
         sl, bs, _ = keys_vector.size()
-        for index, input_step in enumerate(input_tensor, 1):
-            if mask:
-                mask_ = V(tr.zeros(sl, bs, self.num_heads))
-                mask_[:index] = 1
-            else:
-                mask_ = None
-            self_attention_outputs.append(
-                self.attention(query=input_step, keys=keys_vector,
-                               values=values_vector, mask=mask_))  # dims [bs, dims]
-        return tr.stack(self_attention_outputs, dim=0)  # dims [sl, bs, dims]
+        mask = self.causal_mask(bs=bs, sl=sl) if mask else None
+        outputs = self.attention(query=input_tensor, keys=keys_vector, values=values_vector, mask=mask)
+        return outputs
 
 
 class TransformerLayer(nn.Module):

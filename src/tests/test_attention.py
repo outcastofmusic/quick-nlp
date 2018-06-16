@@ -45,31 +45,34 @@ def test_SDPAttention(attention_setup):
         assert (bs, ed) == result.shape
 
 
-def test_MultiHeadAttention(attention_setup):
+@pytest.fixture()
+def self_attention_setup(attention_setup):
     keys, query = attention_setup
-    bs = query.size(0)
-    ed = keys.size(2)
-    eq = query.size(1)
+    query = query.unsqueeze(0).repeat(7, 1, 1)
+    return keys, query
+
+
+def test_MultiHeadAttention(self_attention_setup):
+    keys, query = self_attention_setup
+    slk, bs, ek = keys.size()
+    slq, bs, eq = query.size()
     num_heads = 4
     nhid = 10
     attention = to_gpu(
-        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ed, query_dim=eq, values_dim=ed, dropout=0.3))
+        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ek, query_dim=eq, values_dim=ek, dropout=0.3))
 
     result = attention(query=V(query), keys=V(keys), values=V(keys))
-    assert_dims(result, [bs, num_heads * nhid])
+    assert_dims(result, [slq, bs, num_heads * nhid])
 
 
-def test_MultiHeadAttention_with_mask(attention_setup):
-    keys, query = attention_setup
-    bs = query.size(0)
-    ed = keys.size(2)
-    sl = keys.size(0)
-    eq = query.size(1)
+def test_MultiHeadAttention_with_mask(self_attention_setup):
+    keys, query = self_attention_setup
+    slk, bs, ek = keys.size()
+    slq, bs, eq = query.size()
     num_heads = 4
     nhid = 10
     attention = to_gpu(
-        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ed, query_dim=eq, values_dim=ed, dropout=0.3))
-    mask = V(T(np.zeros((sl, bs, num_heads))))
-    mask[0] = 1
+        MultiHeadAttention(num_heads=num_heads, nhid=nhid, keys_dim=ek, query_dim=eq, values_dim=ek, dropout=0.3))
+    mask = T(np.tril(np.ones((bs, num_heads, slq, slk)))).float()
     result = attention(query=V(query), keys=V(keys), values=V(keys), mask=mask)
-    assert_dims(result, [bs, num_heads * nhid])
+    assert_dims(result, [slq, bs, num_heads * nhid])
