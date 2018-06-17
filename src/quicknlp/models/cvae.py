@@ -70,27 +70,28 @@ class CVAE(HRED):
             return mu
 
     def forward(self, *inputs, num_beams=0):
-        encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
-        # reset the states for the new batch
-        num_utterances, max_sl, bs = encoder_inputs.size()
-        self.reset_encoders(bs)
-        outputs, session = self.encoder(encoder_inputs)
-        self.encoder.query_encoder.reset(bs)
-        decoder_outputs = self.encoder.query_encoder(decoder_inputs)
-        decoder_out = concat_bidir_state(self.encoder.query_encoder_layer.get_last_hidden_state(),
-                                         cell_type=self.cell_type, nlayers=1,
-                                         bidir=self.encoder.bidir
-                                         )
-        x = torch.cat([session, decoder_out], dim=-1)
-        prior_log_var, prior_mu, recog_log_var, recog_mu, session = self.variational_encoding(session, x)
-        bow_logits = self.bow_network(session).squeeze(0) if num_beams == 0 else None
+        with torch.set_grad_enabled(self.training):
+            encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
+            # reset the states for the new batch
+            num_utterances, max_sl, bs = encoder_inputs.size()
+            self.reset_encoders(bs)
+            outputs, session = self.encoder(encoder_inputs)
+            self.encoder.query_encoder.reset(bs)
+            decoder_outputs = self.encoder.query_encoder(decoder_inputs)
+            decoder_out = concat_bidir_state(self.encoder.query_encoder_layer.get_last_hidden_state(),
+                                             cell_type=self.cell_type, nlayers=1,
+                                             bidir=self.encoder.bidir
+                                             )
+            x = torch.cat([session, decoder_out], dim=-1)
+            prior_log_var, prior_mu, recog_log_var, recog_mu, session = self.variational_encoding(session, x)
+            bow_logits = self.bow_network(session).squeeze(0) if num_beams == 0 else None
 
-        state, constraints = self.map_session_hidden_state_to_decoder_init_state(session)
-        outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
-        if num_beams == 0:
-            return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*outputs, *outputs_dec]
-        else:
-            return predictions, [*outputs, *outputs_dec]
+            state, constraints = self.map_session_hidden_state_to_decoder_init_state(session)
+            outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
+            if num_beams == 0:
+                return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*outputs, *outputs_dec]
+            else:
+                return predictions, [*outputs, *outputs_dec]
 
     def variational_encoding(self, session, x):
         recog_mu_log_var = self.recognition_network(x)

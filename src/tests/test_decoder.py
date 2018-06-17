@@ -115,17 +115,16 @@ def test_rnn_decoder(rnn_decoder, decoder_inputs):
     hidden = decoder.hidden
     decoder.projection_layer.keys = keys
     outputs = decoder(dec_ins, hidden=hidden, num_beams=params.num_beams)
-    assert params.nlayers == len(outputs)
     if params.num_beams > 0:
         assert_dims(outputs,
-                    [params.nlayers, None, params.num_beams * params.batch_size, (params.nhid, params.ntokens)])
+                    [None, params.num_beams * params.batch_size, (params.nhid, params.ntokens)])
         # actual beam outputs can be found in beam_outputs
         assert decoder.beam_outputs is not None
         assert_dims(decoder.beam_outputs, [None, params.batch_size, params.num_beams])
         # the sl can go up to max_tokens + 1(for the extra 0 token at the end)
         assert 0 < decoder.beam_outputs.shape[0] <= params.max_tokens + 1
     else:
-        assert_dims(outputs, [params.nlayers, None, params.batch_size, (params.nhid, params.ntokens)])
+        assert_dims(outputs, [None, params.batch_size, (params.nhid, params.ntokens)])
         assert decoder.beam_outputs is None
 
 
@@ -161,12 +160,12 @@ def test_transformer_decoder(num_beams, decoder_inputs_transformer):
     outputs = decoder(vin, ven, num_beams=num_beams)
     if num_beams > 0:
         assert_dims(outputs,
-                    [nlayers, None, num_beams * batch_size, (emb_size, ntokens)])
+                    [None, num_beams * batch_size, (emb_size, ntokens)])
         # actual beam outputs can be found in beam_outputs
         assert decoder.beam_outputs is not None
         assert_dims(decoder.beam_outputs, [None, batch_size, num_beams])
         # the sl can go up to max_tokens + 1(for the extra 0 token at the end)
         assert 0 < decoder.beam_outputs.shape[0] <= max_tokens + 1
     else:
-        assert_dims(outputs, [nlayers, None, batch_size, (emb_size, ntokens)])
+        assert_dims(outputs, [None, batch_size, (emb_size, ntokens)])
         assert decoder.beam_outputs is None

@@ -1,3 +1,5 @@
+import torch
+
 import torch.nn as nn
 
 from quicknlp.modules import AttentionDecoder, AttentionProjection, Encoder, RNNLayers
@@ -96,22 +98,23 @@ class Seq2SeqAttention(nn.Module):
         )
 
     def forward(self, *inputs, num_beams=0):
-        encoder_inputs, decoder_inputs = inputs
-        # reset the states for the new batch
-        bs = encoder_inputs.size(1)
-        self.encoder.reset(bs)
-        self.decoder.reset(bs)
-        outputs = self.encoder(encoder_inputs)
-        # as initial state we use the initial decoder state (zeros)
-        state = self.decoder.hidden
-        assert_dims(outputs, [self.nlayers[0], None, bs, (self.nhid[0], self.emb_sz[0])])
-        # pass the encoder outputs as keys to the attention projection_layer
-        self.decoder.projection_layer.reset(keys=outputs[-1])
-        if self.training:
-            self.decoder.pr_force = self.pr_force
-            nb = 1 if self.pr_force < 1 else 0
-        else:
-            nb = num_beams
-        outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
-        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
+        with torch.set_grad_enabled(self.training):
+            encoder_inputs, decoder_inputs = inputs
+            # reset the states for the new batch
+            bs = encoder_inputs.size(1)
+            self.encoder.reset(bs)
+            self.decoder.reset(bs)
+            outputs = self.encoder(encoder_inputs)
+            # as initial state we use the initial decoder state (zeros)
+            state = self.decoder.hidden
+            assert_dims(outputs, [self.nlayers[0], None, bs, (self.nhid[0], self.emb_sz[0])])
+            # pass the encoder outputs as keys to the attention projection_layer
+            self.decoder.projection_layer.reset(keys=outputs[-1])
+            if self.training:
+                self.decoder.pr_force = self.pr_force
+                nb = 1 if self.pr_force < 1 else 0
+            else:
+                nb = num_beams
+            outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb)
+            predictions = outputs_dec[:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
         return predictions, [*outputs, *outputs_dec]

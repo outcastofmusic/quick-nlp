@@ -1,3 +1,5 @@
+import torch
+
 import torch.nn as nn
 
 from quicknlp.modules import Encoder, Projection, TransformerDecoder, TransformerDecoderLayers, TransformerEmbeddings, \
@@ -52,9 +54,9 @@ class Transformer(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, *inputs, num_beams=0):
-
-        encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
-        encoder_outputs = self.encoder(encoder_inputs)
-        decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
-        predictions = decoder_outputs[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
+        with torch.set_grad_enabled(self.training):
+            encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
+            encoder_outputs = self.encoder(encoder_inputs)
+            decoder_outputs = self.decoder(decoder_inputs, encoder_outputs, num_beams=num_beams)
+            predictions = decoder_outputs[:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
         return predictions, decoder_outputs

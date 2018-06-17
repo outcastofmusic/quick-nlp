@@ -48,15 +48,16 @@ class HREDConstrained(HRED):
                                                        )
 
     def forward(self, *inputs, num_beams=0):
-        encoder_inputs, constraints, decoder_inputs = inputs  # dims: [sl, bs] for encoder and decoder
-        # reset the states for the new batch
-        num_utterances, max_sl, bs = encoder_inputs.size()
-        self.reset_encoders(bs)
-        outputs, last_output = self.encoder(encoder_inputs)
-        state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
-        # get as a  constraint the second token of the targets
-        constraints = self.constraint_embeddings(constraints)  # dims [bs, ed]
-        constraints = torch.cat([last_output, constraints], dim=-1) if self.session_constraint else constraints
+        with torch.set_grad_enabled(self.training):
+            encoder_inputs, constraints, decoder_inputs = inputs  # dims: [sl, bs] for encoder and decoder
+            # reset the states for the new batch
+            num_utterances, max_sl, bs = encoder_inputs.size()
+            self.reset_encoders(bs)
+            outputs, last_output = self.encoder(encoder_inputs)
+            state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
+            # get as a  constraint the second token of the targets
+            constraints = self.constraint_embeddings(constraints)  # dims [bs, ed]
+            constraints = torch.cat([last_output, constraints], dim=-1) if self.session_constraint else constraints
 
-        outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
-        return predictions, [*outputs, *outputs_dec]
+            outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
+            return predictions, [*outputs, *outputs_dec]

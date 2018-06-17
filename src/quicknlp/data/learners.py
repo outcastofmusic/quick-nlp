@@ -31,6 +31,7 @@ def decoder_loss_label_smoothing(input, target, pad_idx, confidence=0.9, **kwarg
     # if the input size is smaller than the target fill it up with zeros (i.e. unks)
     if sl > sl_in:
         input = F.pad(input, (0, sl - sl_in, 0, 0, 0, 0), value=0.)
+    input = input[:sl]
     smoothing_pdf = (1. - confidence) / (vocab - 2)  # we subtract the confidence token and the pad token from the vocab
     targets = torch.zeros_like(input).scatter(2, target.unsqueeze(-1), confidence - smoothing_pdf)
     targets = (targets + smoothing_pdf)

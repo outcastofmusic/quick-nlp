@@ -1,3 +1,4 @@
+import torch
 from typing import List, Union
 
 import torch.nn as nn
@@ -110,13 +111,14 @@ class HRED(nn.Module):
                                               out_features=self.decoder.layers[0].output_size)
 
     def forward(self, *inputs, num_beams=0):
-        encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
-        num_utterances, max_sl, bs = encoder_inputs.size()
-        # reset the states for the new batch
-        self.reset_encoders(bs)
-        outputs, last_output = self.encoder(encoder_inputs)
-        state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
-        outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
+        with torch.set_grad_enabled(self.training):
+            encoder_inputs, decoder_inputs = assert_dims(inputs, [2, None, None])  # dims: [sl, bs] for encoder and decoder
+            num_utterances, max_sl, bs = encoder_inputs.size()
+            # reset the states for the new batch
+            self.reset_encoders(bs)
+            outputs, last_output = self.encoder(encoder_inputs)
+            state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
+            outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
         return predictions, [*outputs, *outputs_dec]
 
     def map_session_hidden_state_to_decoder_init_state(self, last_output):
@@ -144,5 +146,5 @@ class HRED(nn.Module):
         else:
             nb = num_beams
         outputs_dec = self.decoder(decoder_inputs, hidden=state, num_beams=nb, constraints=constraints)
-        predictions = outputs_dec[-1][:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
+        predictions = outputs_dec[:decoder_inputs.size(0)] if num_beams == 0 else self.decoder.beam_outputs
         return outputs_dec, predictions
