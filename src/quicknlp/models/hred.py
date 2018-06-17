@@ -117,20 +117,20 @@ class HRED(nn.Module):
             # reset the states for the new batch
             self.reset_encoders(bs)
             outputs, last_output = self.encoder(encoder_inputs)
-            state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
+            state, constraints = self.encoder_hidden_state_projection(last_output)
             outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state, constraints=constraints)
         return predictions, [*outputs, *outputs_dec]
 
-    def map_session_hidden_state_to_decoder_init_state(self, last_output):
+    def encoder_hidden_state_projection(self, last_output):
         state = self.decoder.hidden
         # if there are multiple layers we set the state to the first layer and ignore all others
         # get the session_output of the last layer and the last step
         if self.cell_type == "gru":
-            # Tanh seems to deteriorate performance so not used as a nonlinear
+            # Tanh seems to deteriorate performance so not used as a nonlinear (is this a pytorch bug?)
             state[0] = self.decoder_state_linear(last_output)  # .tanh()
             constraints = last_output if self.session_constraint else None  # dims  [1, bs, ed]
         else:
-            # Tanh seems to deteriorate performance so not used as a nonlinear
+            # Tanh seems to deteriorate performance so not used as a nonlinear (is this a pytorch bug?)
             state[0] = self.decoder_state_linear(last_output[0]), self.decoder_state_linear(last_output[1])
             constraints = last_output[0] if self.session_constraint else None  # dims  [1, bs, ed]
         return state, constraints

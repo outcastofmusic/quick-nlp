@@ -1,20 +1,9 @@
 import torch as tr
 from fastai.core import T, V, to_gpu
 
-from quicknlp.modules.layer_norm import LayerNorm
 from quicknlp.modules.transformer import AttentionLayer, TransformerDecoderLayers, TransformerEncoderLayers, \
     TransformerLayer, TransformerLayerDecoder
 from quicknlp.utils import assert_dims
-
-
-def test_layer_norm():
-    sl = 10
-    bs = 2
-    in_features = 32
-    inputs = to_gpu(V(tr.randn([sl, bs, in_features])))
-    layernorm = to_gpu(LayerNorm(in_features))
-    outputs = layernorm(inputs)
-    assert_dims(outputs, [sl, bs, in_features])
 
 
 def test_attention_layer():

@@ -150,9 +150,8 @@ class Decoder(nn.Module):
             finished = finished | new_finished
             iteration += 1
 
-        # ensure the outputs are a list of layers where each layer is [sl,bs,layerdim]
-        # outputs = [torch.cat(i, dim=0) for i in layer_outputs]
         self.beam_outputs = self.beam_outputs.view(-1, bs, num_beams)
+        # ensure the outputs is the output of the last layer [sl,bs, nt]
         outputs = torch.cat(final_outputs, dim=0)
         return outputs
 
@@ -272,7 +271,7 @@ class TransformerDecoder(Decoder):
             self.beam_outputs = torch.index_select(self.beam_outputs, dim=1, index=parent_indices.cpu())
             self.beam_outputs = torch.cat([self.beam_outputs, step_inputs.cpu()], dim=0)
 
-        # ensure the outputs are a list of layers where each layer is [sl,bs,layerdim]
+        # ensure the outputs is the output of the last layer [sl,bs, nt]
         outputs = torch.cat(final_outputs, dim=0)
         self.beam_outputs = self.beam_outputs.view(-1, bs, num_beams)
         return outputs

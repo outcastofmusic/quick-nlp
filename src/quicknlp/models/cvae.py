@@ -86,7 +86,7 @@ class CVAE(HRED):
             prior_log_var, prior_mu, recog_log_var, recog_mu, session = self.variational_encoding(session, x)
             bow_logits = self.bow_network(session).squeeze(0) if num_beams == 0 else None
 
-            state, constraints = self.map_session_hidden_state_to_decoder_init_state(session)
+            state, constraints = self.encoder_hidden_state_projection(session)
             outputs_dec, predictions = self.decoding(decoder_inputs, num_beams, state)
             if num_beams == 0:
                 return [predictions, recog_mu, recog_log_var, prior_mu, prior_log_var, bow_logits], [*outputs, *outputs_dec]

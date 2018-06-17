@@ -54,7 +54,7 @@ class HREDConstrained(HRED):
             num_utterances, max_sl, bs = encoder_inputs.size()
             self.reset_encoders(bs)
             outputs, last_output = self.encoder(encoder_inputs)
-            state, constraints = self.map_session_hidden_state_to_decoder_init_state(last_output)
+            state, constraints = self.encoder_hidden_state_projection(last_output)
             # get as a  constraint the second token of the targets
             constraints = self.constraint_embeddings(constraints)  # dims [bs, ed]
             constraints = torch.cat([last_output, constraints], dim=-1) if self.session_constraint else constraints
